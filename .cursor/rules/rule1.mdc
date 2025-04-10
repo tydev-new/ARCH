@@ -1,0 +1,11 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+Prefer concise answers, will ask for details when needed 
+When changing code, only change related to specific requested task, do not make any other improvement in code. List the improvments as suggestion.
+Reference https://peps.python.org/pep-0008/ for python coding standard
