@@ -93,16 +93,6 @@ class CheckpointHandler:
                     member.name = member.name[len(root_dir)+1:]
                     tar.extract(member, path=upperdir)
             
-            # Log the contents and path of restored upperdir
-            '''
-            try:
-                ls_output = subprocess.check_output(["ls", "-la", upperdir], text=True)
-                pwd_output = subprocess.check_output(["pwd"], text=True, cwd=upperdir)
-                logger.info(f"Restored upperdir contents:\n{ls_output}")
-                logger.info(f"Restored upperdir path: {pwd_output.strip()}")
-            except subprocess.CalledProcessError as e:
-                logger.warning(f"Failed to get upperdir info: {e}")
-            '''
             logger.info(f"Successfully restored checkpoint to {upperdir}")
             return True
         except Exception as e:
@@ -118,3 +108,21 @@ class CheckpointHandler:
             logger.info("Rollback completed successfully")
         else:
             logger.info("Upperdir does not exist, no cleanup needed")
+
+    def cleanup_checkpoint(self, checkpoint_path: str) -> bool:
+        """Clean up checkpoint files."""
+        if not checkpoint_path:
+            logger.info("No checkpoint path provided, skipping cleanup")
+            return False
+            
+        if not os.path.exists(checkpoint_path):
+            logger.info(f"Checkpoint path {checkpoint_path} does not exist, skipping cleanup")
+            return False
+            
+        try:
+            logger.info(f"Removing checkpoint at {checkpoint_path}")
+            shutil.rmtree(checkpoint_path)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to remove checkpoint: {e}")
+            return False

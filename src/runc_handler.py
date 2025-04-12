@@ -86,6 +86,11 @@ class RuncHandler:
         """Handle create command processing."""
         logger.info("Processing create command for container %s in namespace %s", container_id, namespace)
         logger.info("Original command: %s", arg)
+
+        # Create state file for Tardis-enabled container
+        self.state_manager.create_state(namespace, container_id)
+        logger.info("Created state file for container %s in namespace %s", container_id, namespace)
+
         # First verify bind mount
         # TODO: Implement bind mount verification
         # if not self.config_handler.verify_bind_mount(container_id, namespace):
@@ -207,14 +212,16 @@ class RuncHandler:
         
         # Add subcommand options, excluding work-path and leave-running
         for opt, value in subcmd_options.items():
-            #if opt not in ["--work-path", "--leave-running"]:  # Skip work-path and leave-running options
-            if opt not in ["--work-path"]:
-                if opt == "--image-path":
-                    cmd.extend([opt, checkpoint_path])  # Use our checkpoint path
-                elif value == "":  # Handle options with empty values
-                    cmd.append(opt)
-                else:
-                    cmd.extend([opt, value])
+            # Skip work-path and leave-running options
+            if opt in ["--work-path", "--leave-running"]:
+                continue
+                
+            if opt == "--image-path":
+                cmd.extend([opt, checkpoint_path])  # Use our checkpoint path
+            elif value == "":  # Handle options with empty values
+                cmd.append(opt)
+            else:
+                cmd.extend([opt, value])
         
         # Add container ID
         cmd.append(container_id)
@@ -259,7 +266,7 @@ class RuncHandler:
         exit_code = self.state_manager.get_exit_code(namespace, container_id)
         logger.info("Exit code for container %s: %s", container_id, exit_code)
         
-        if exit_code is not None and exit_code == 0:  # Only cleanup if exit code exists and is 0
+        if exit_code is not None and exit_code == 0:  # Only cleanup checkpoint if exit code is 0
             logger.info("Container %s exited successfully with code 0, proceeding with cleanup", container_id)
             
             # Get checkpoint path
@@ -272,12 +279,14 @@ class RuncHandler:
                 logger.info("Cleaning up checkpoint for container %s at %s", container_id, checkpoint_path)
                 if self.checkpoint_handler.cleanup_checkpoint(checkpoint_path):
                     logger.info("Successfully cleaned up checkpoint for container %s", container_id)
-                    self.state_manager.remove_exit_code(namespace, container_id)
-                    logger.info("Removed exit code for container %s", container_id)
                 else:
                     logger.warning("Failed to clean up checkpoint for container %s", container_id)
             else:
                 logger.info("No checkpoint path found for container %s, skipping cleanup", container_id)
+        
+        # Always clear state regardless of exit code
+        self.state_manager.clear_state(namespace, container_id)
+        logger.info("Cleared state for container %s", container_id)
         
         # Pass through original command
         logger.info("Executing original delete command for container %s", container_id)

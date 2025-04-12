@@ -58,15 +58,14 @@ class ContainerStateManager:
             'last_updated': datetime.now().isoformat()
         }
         
-    def _read_state(self, state_file: str) -> Dict:
+    def _read_state(self, state_file: str) -> Optional[Dict]:
         """Read container state from file with file locking.
         
         Uses fcntl.LOCK_SH for shared (read) access, allowing multiple processes
         to read simultaneously while preventing writes.
         
-        Raises:
-            ValueError: If state structure is invalid
-            IOError: If file operations fail
+        Returns:
+            Optional[Dict]: State dictionary if valid, None if file not found or invalid
         """
         try:
             with open(state_file, 'r') as f:
@@ -75,13 +74,14 @@ class ContainerStateManager:
                 try:
                     state = json.load(f)
                     if not self._validate_state(state):
-                        raise ValueError(f"Invalid state structure in {state_file}")
+                        logger.warning(f"Invalid state structure in {state_file}")
+                        return None
                     return state
                 finally:
                     fcntl.flock(f.fileno(), fcntl.LOCK_UN)
         except (FileNotFoundError, json.JSONDecodeError) as e:
-            logger.error(f"Failed to read state file {state_file}: {e}")
-            raise
+            logger.warning(f"Failed to read state file {state_file}: {e}")
+            return None
             
     def _write_state(self, state_file: str, state: Dict) -> None:
         """Write container state to file with file locking.
@@ -146,18 +146,15 @@ class ContainerStateManager:
         """
         Create initial state file for a container.
         Called by RuncHandler during container create if container is Tardis-enabled.
+        If state already exists, it will be overwritten with fresh state.
         
         Args:
             namespace: Container namespace
             container_id: Container ID
             
         Raises:
-            ValueError: If state already exists
             IOError: If file operations fail
         """
-        if self.has_state(namespace, container_id):
-            raise ValueError(f"State already exists for container {container_id} in namespace {namespace}")
-            
         state_file = self._get_state_file(namespace, container_id)
         initial_state = self._create_initial_state()
         self._write_state(state_file, initial_state)
@@ -180,11 +177,13 @@ class ContainerStateManager:
             raise ValueError(f"Cannot set skip_start: no state exists for container {container_id}")
             
         state_file = self._get_state_file(namespace, container_id)
-        state = self._read_state(state_file)
-        state['skip_start'] = value
-        state['last_updated'] = datetime.now().isoformat()
-        self._write_state(state_file, state)
-        logger.info(f"Set skip_start={value} for container {container_id} in namespace {namespace}")
+        try:
+            state = self._read_state(state_file)
+            state['skip_start'] = value
+            state['last_updated'] = datetime.now().isoformat()
+            self._write_state(state_file, state)
+        except (FileNotFoundError, json.JSONDecodeError):
+            logger.warning(f"Cannot set skip_start: no state file found for container {container_id} in namespace {namespace}")
         
     def get_skip_start(self, namespace: str, container_id: str) -> bool:
         """
@@ -201,8 +200,12 @@ class ContainerStateManager:
             IOError: If file operations fail
         """
         state_file = self._get_state_file(namespace, container_id)
-        state = self._read_state(state_file)
-        return state.get('skip_start', False)
+        try:
+            state = self._read_state(state_file)
+            return state.get('skip_start', False)
+        except (FileNotFoundError, json.JSONDecodeError):
+            logger.warning(f"No state file found for container {container_id} in namespace {namespace}, returning False for skip_start")
+            return False
         
     def set_skip_resume(self, namespace: str, container_id: str, value: bool) -> None:
         """
@@ -221,11 +224,13 @@ class ContainerStateManager:
             raise ValueError(f"Cannot set skip_resume: no state exists for container {container_id}")
             
         state_file = self._get_state_file(namespace, container_id)
-        state = self._read_state(state_file)
-        state['skip_resume'] = value
-        state['last_updated'] = datetime.now().isoformat()
-        self._write_state(state_file, state)
-        logger.info(f"Set skip_resume={value} for container {container_id} in namespace {namespace}")
+        try:
+            state = self._read_state(state_file)
+            state['skip_resume'] = value
+            state['last_updated'] = datetime.now().isoformat()
+            self._write_state(state_file, state)
+        except (FileNotFoundError, json.JSONDecodeError):
+            logger.warning(f"Cannot set skip_resume: no state file found for container {container_id} in namespace {namespace}")
         
     def get_skip_resume(self, namespace: str, container_id: str) -> bool:
         """
@@ -242,8 +247,12 @@ class ContainerStateManager:
             IOError: If file operations fail
         """
         state_file = self._get_state_file(namespace, container_id)
-        state = self._read_state(state_file)
-        return state.get('skip_resume', False)
+        try:
+            state = self._read_state(state_file)
+            return state.get('skip_resume', False)
+        except (FileNotFoundError, json.JSONDecodeError):
+            logger.warning(f"No state file found for container {container_id} in namespace {namespace}, returning False for skip_resume")
+            return False
         
     def set_exit_code(self, namespace: str, container_id: str, exit_code: int) -> None:
         """
@@ -259,14 +268,18 @@ class ContainerStateManager:
             IOError: If file operations fail
         """
         if not self.has_state(namespace, container_id):
-            raise ValueError(f"Cannot set exit_code: no state exists for container {container_id}")
+            logger.warning(f"Cannot set exit_code: no state exists for container {container_id}")
+            return
             
         state_file = self._get_state_file(namespace, container_id)
         state = self._read_state(state_file)
+        if state is None:
+            logger.warning(f"Cannot set exit_code: failed to read state for container {container_id}")
+            return
+            
         state['exit_code'] = exit_code
         state['last_updated'] = datetime.now().isoformat()
         self._write_state(state_file, state)
-        logger.info(f"Set exit_code={exit_code} for container {container_id} in namespace {namespace}")
         
     def get_exit_code(self, namespace: str, container_id: str) -> Optional[int]:
         """
@@ -278,12 +291,12 @@ class ContainerStateManager:
             
         Returns:
             Optional[int]: Container exit code if set, None otherwise
-            
-        Raises:
-            IOError: If file operations fail
         """
         state_file = self._get_state_file(namespace, container_id)
         state = self._read_state(state_file)
+        if state is None:
+            logger.warning(f"No state file found for container {container_id} in namespace {namespace}, returning None for exit_code")
+            return None
         return state.get('exit_code')
         
     def clear_state(self, namespace: str, container_id: str) -> None:

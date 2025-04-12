@@ -17,4 +17,24 @@ ENV_TARDIS_ENABLE = "TARDIS_ENABLE"
 INTERCEPTABLE_COMMANDS = {'create', 'start', 'checkpoint', 'resume', 'delete'}
 
 # Add this constant for the event listener PID file
-EVENT_LISTENER_PID_FILE = "/var/lib/tardis/event_listener.pid" 
+EVENT_LISTENER_PID_FILE = "/var/lib/tardis/event_listener.pid"
+
+# List of boolean flags for runc subcommands that don't take values
+RUNC_SUBCMD_BOOLEAN_FLAGS = [
+    # From runc-checkpoint
+    "--leave-running", "--tcp-established", "--ext-unix-sk", 
+    "--shell-job", "--lazy-pages", "--file-locks", 
+    "--pre-dump", "--auto-dedup",
+    # From runc-create
+    "--no-pivot", "--no-new-keyring",
+    # Global options
+    "--debug", "--systemd-cgroup", "--help", "-h", "--version", "-v",
+    # Other common flags
+    "--detach",
+    # Additional global options
+    "--rootless",
+    # Additional checkpoint options
+    "--manage-cgroups-mode", "--empty-ns", "--status-fd", "--page-server"
+]
+
+# No need for SHORT_OPTION_MAP since we don't use bundle value for special handling 
