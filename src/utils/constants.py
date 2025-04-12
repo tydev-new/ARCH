@@ -6,6 +6,7 @@ import os
 CONFIG_DIR = "/etc/tardis"
 CONFIG_PATH = os.path.join(CONFIG_DIR, "tardis.env")
 STATE_DIR = "/var/lib/tardis/state"
+DEFAULT_CHECKPOINT_PATH = "/var/lib/tardis/checkpoint"
 
 # Environment variables
 ENV_REAL_RUNC_CMD = "TARDIS_REAL_RUNC_CMD"
@@ -13,4 +14,7 @@ ENV_REAL_RUNC_CMD = "TARDIS_REAL_RUNC_CMD"
 ENV_TARDIS_ENABLE = "TARDIS_ENABLE"
 
 # Runc command related
-INTERCEPTABLE_COMMANDS = {'create', 'start', 'checkpoint', 'restore', 'delete'} 
+INTERCEPTABLE_COMMANDS = {'create', 'start', 'checkpoint', 'resume', 'delete'}
+
+# Add this constant for the event listener PID file
+EVENT_LISTENER_PID_FILE = "/var/lib/tardis/event_listener.pid" 
