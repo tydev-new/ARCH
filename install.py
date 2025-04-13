@@ -14,16 +14,10 @@ def check_root():
         sys.exit(1)
 
 def check_dependencies():
-    """Check and install required dependencies"""
+    """Check and install required dependencies."""
     try:
-        # Check Python version
-        if sys.version_info < (3, 6):
-            logger.error("Python 3.6 or higher is required")
-            sys.exit(1)
-
-        # Check for required packages
         import pkg_resources
-        required = {'pytest', 'pytest-cov'}
+        required = {'criu', 'containerd', 'runc'}
         installed = {pkg.key for pkg in pkg_resources.working_set}
         missing = required - installed
 
@@ -116,7 +110,7 @@ REAL_RUNC="{backup_path}"
 
 if [ -f "$MAIN_SCRIPT" ]; then
     cd "$(dirname "$(dirname "$MAIN_SCRIPT")")"
-    exec python3 "$MAIN_SCRIPT" "$@"
+    exec python3 -m "$MAIN_SCRIPT" "$@"
 else
     exec "$REAL_RUNC" "$@"
 fi
