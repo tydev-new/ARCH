@@ -10,8 +10,6 @@ DEFAULT_CHECKPOINT_PATH = "/var/lib/tardis/checkpoint"
 
 # Environment variables
 ENV_REAL_RUNC_CMD = "TARDIS_REAL_RUNC_CMD"
-# TODO: Used for container config validation to determine if container is Tardis-enabled
-ENV_TARDIS_ENABLE = "TARDIS_ENABLE"
 
 # Runc command related
 INTERCEPTABLE_COMMANDS = {'create', 'start', 'checkpoint', 'resume', 'delete'}
@@ -38,3 +36,19 @@ RUNC_SUBCMD_BOOLEAN_FLAGS = [
 ]
 
 # No need for SHORT_OPTION_MAP since we don't use bundle value for special handling 
+
+# Container config paths
+CONTAINER_CONFIG_PATHS = [
+    "/run/containerd/io.containerd.runtime.v2.task/{namespace}/{container_id}/config.json",
+    "/run/containerd/runc/{namespace}/{container_id}/config.json",
+    "/run/runc/{namespace}/{container_id}/config.json"
+] 
+
+CONTAINER_ROOTFS_PATHS = [
+    "/run/containerd/io.containerd.runtime.v2.task/{namespace}/{container_id}/rootfs",
+    "/run/containerd/runc/{namespace}/{container_id}/rootfs",
+    "/run/runc/{namespace}/{container_id}/rootfs"
+] 
+
+# Logging
+LOG_FILE = "logs/tardis.log"

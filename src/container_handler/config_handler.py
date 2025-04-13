@@ -1,17 +1,14 @@
 import os
 import json
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, List
 from src.utils.logging import logger
+from src.utils.constants import CONFIG_PATH, DEFAULT_CHECKPOINT_PATH, CONTAINER_CONFIG_PATHS
 
 class ContainerConfigHandler:
     """Handler for container configuration validation and management."""
     
     def __init__(self):
-        self.possible_config_paths = [
-            "/run/containerd/io.containerd.runtime.v2.task/{namespace}/{container_id}/config.json",
-            "/run/containerd/runc/{namespace}/{container_id}/config.json",
-            "/run/runc/{namespace}/{container_id}/config.json"
-        ]
+        self.possible_config_paths = CONTAINER_CONFIG_PATHS
     
     def _find_config_path(self, namespace: str, container_id: str) -> Optional[str]:
         """
@@ -55,31 +52,41 @@ class ContainerConfigHandler:
             logger.error(f"Failed to read config.json from {config_path}: {str(e)}")
             return None
 
-    def _validate_config(self, config: Dict) -> Tuple[bool, Optional[str]]:
+    def _get_env_var_value(self, container_id: str, namespace: str, var_name: str, default: Optional[str] = "0") -> Optional[str]:
         """
-        Validate container config structure and extract environment variables.
+        Get value of a specific environment variable from container config.
         
         Args:
-            config: Container configuration dictionary
+            container_id: Container ID
+            namespace: Container namespace
+            var_name: Name of the environment variable
+            default: Default value if variable not found, None for path variables
             
         Returns:
-            Tuple[bool, Optional[str]]: (is_valid, error_message)
+            Optional[str]: Value of the environment variable or default
         """
-        if 'process' not in config:
-            return False, "'process'"
-        return True, None
-
-    def _get_env_vars(self, config: Dict) -> list:
-        """
-        Extract environment variables from config.
-        
-        Args:
-            config: Container configuration dictionary
+        if not container_id or not namespace:
+            logger.error(f"Invalid container_id or namespace: id={container_id}, namespace={namespace}")
+            return default
             
-        Returns:
-            list: Environment variables
-        """
-        return config['process'].get('env', [])
+        try:
+            config_path = self._find_config_path(namespace, container_id)
+            if not config_path:
+                return default
+                
+            config = self._read_config(config_path)
+            if not config or 'process' not in config:
+                return default
+                
+            env_vars = config['process'].get('env', [])
+            for var in env_vars:
+                if var.startswith(f"{var_name}="):
+                    return var.split('=', 1)[1]
+            return default
+            
+        except Exception as e:
+            logger.error(f"Error reading config for container {container_id}: {str(e)}")
+            return default
     
     def is_tardis_enabled(self, container_id: str, namespace: str) -> bool:
         """
@@ -92,78 +99,36 @@ class ContainerConfigHandler:
         Returns:
             bool: True if Tardis is enabled, False otherwise
         """
-        if not container_id or not namespace:
-            logger.error(f"Invalid container_id or namespace: id={container_id}, namespace={namespace}")
-            return False
-            
-        try:
-            # Find and read config
-            config_path = self._find_config_path(namespace, container_id)
-            if not config_path:
-                return False
-                
-            config = self._read_config(config_path)
-            if not config:
-                return False
-            
-            # Validate config structure
-            is_valid, error = self._validate_config(config)
-            if not is_valid:
-                logger.error(f"Error checking Tardis enable status: {error}")
-                return False
-            
-            # Check for Tardis enable flag
-            env = self._get_env_vars(config)
-            is_enabled = 'TARDIS_ENABLE=1' in env
-            logger.info(f"Container {container_id} is Tardis-enabled" if is_enabled else f"Container {container_id} is not Tardis-enabled")
-            return is_enabled
-            
-        except Exception as e:
-            logger.error(f"Error checking Tardis status for container {container_id}: {str(e)}")
-            return False
-    
+        is_enabled = self._get_env_var_value(container_id, namespace, "TARDIS_ENABLE") == "1"
+        logger.info(f"Container {container_id} is Tardis-enabled" if is_enabled else f"Container {container_id} is not Tardis-enabled")
+        return is_enabled
+
     def get_checkpoint_path(self, container_id: str, namespace: str) -> Optional[str]:
         """
-        Get the checkpoint path from container config.
+        Get checkpoint path following priority rules.
         
         Args:
             container_id: Container ID
             namespace: Container namespace
             
         Returns:
-            str: Checkpoint path if specified, None otherwise
+            Optional[str]: Checkpoint path if found, None otherwise
         """
-        if not container_id or not namespace:
-            logger.error(f"Invalid container_id or namespace: id={container_id}, namespace={namespace}")
-            return None
-            
         try:
-            # Find and read config
-            config_path = self._find_config_path(namespace, container_id)
-            if not config_path:
-                return None
-                
-            config = self._read_config(config_path)
-            if not config:
-                return None
+            # Check networkfs path first
+            networkfs_path = self._get_env_var_value(container_id, namespace, "TARDIS_NETWORKFS_HOST_PATH", default=None)
+            if networkfs_path:
+                return os.path.join(networkfs_path, "checkpoint", namespace, container_id)
             
-            # Validate config structure
-            is_valid, error = self._validate_config(config)
-            if not is_valid:
-                logger.error(f"Error getting checkpoint path: {error}")
-                return None
+            # Then checkpoint host path
+            checkpoint_path = self._get_env_var_value(container_id, namespace, "TARDIS_CHECKPOINT_HOST_PATH", default=None)
+            if checkpoint_path:
+                return os.path.join(checkpoint_path, namespace, container_id)
             
-            # Look for checkpoint path
-            env = self._get_env_vars(config)
-            for var in env:
-                if var.startswith('TARDIS_CHECKPOINT_HOST_PATH='):
-                    path = var.split('=', 1)[1]
-                    logger.debug(f"Found checkpoint path: {path}")
-                    return path
-                    
-            logger.debug("No checkpoint path specified in config")
-            return None
+            # Finally default path
+            return os.path.join(DEFAULT_CHECKPOINT_PATH, namespace, container_id)
+            
         except Exception as e:
-            logger.error(f"Error getting checkpoint path: {str(e)}")
+            logger.error(f"Error getting checkpoint path for container {container_id}: {str(e)}")
             return None
 

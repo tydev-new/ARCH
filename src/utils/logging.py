@@ -2,8 +2,9 @@ import logging
 import os
 import sys
 from typing import Optional
+from src.utils.constants import LOG_FILE
 
-def setup_logger(name: str, level: Optional[int] = None, log_file: Optional[str] = None) -> logging.Logger:
+def setup_logger(name: str, level: Optional[int] = None, log_file: str = LOG_FILE) -> logging.Logger:
     """
     Set up a logger with consistent formatting and configuration.
     
@@ -15,6 +16,11 @@ def setup_logger(name: str, level: Optional[int] = None, log_file: Optional[str]
     Returns:
         logging.Logger: Configured logger instance
     """
+    # Create logs directory if it doesn't exist
+    log_dir = os.path.dirname(log_file)
+    if log_dir and not os.path.exists(log_dir):
+        os.makedirs(log_dir, mode=0o755, exist_ok=True)  # rwxr-xr-x
+    
     logger = logging.getLogger(name)
     
     if level is None:
@@ -39,12 +45,6 @@ def setup_logger(name: str, level: Optional[int] = None, log_file: Optional[str]
     
     # File handler if log_file is specified
     if log_file:
-        # Create log directory if it doesn't exist
-        log_dir = os.path.dirname(log_file)
-        if log_dir and not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-            os.chmod(log_dir, 0o666)  # rw-rw-rw-
-            
         # Create empty log file if it doesn't exist and set permissions
         if not os.path.exists(log_file):
             with open(log_file, 'a') as f:
@@ -58,11 +58,6 @@ def setup_logger(name: str, level: Optional[int] = None, log_file: Optional[str]
     return logger
 
 # Create default logger for the application
-logger = setup_logger('tardis', log_file='logs/tardis.log')
+logger = setup_logger('tardis')
 
-# Remove duplicate logger creation
-# logging.basicConfig(
-#     level=logging.INFO,
-#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-# )
-# logger = logging.getLogger('tardis')
+
