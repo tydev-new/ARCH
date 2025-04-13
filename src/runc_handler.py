@@ -91,10 +91,10 @@ class RuncHandler:
         self.state_manager.create_state(namespace, container_id)
         logger.info("Created state file for container %s in namespace %s", container_id, namespace)
 
-        # First verify bind mount
-        # TODO: Implement bind mount verification
-        # if not self.config_handler.verify_bind_mount(container_id, namespace):
-        #     return self._handle_error("Failed to verify bind mount", container_id, namespace)
+        # Add bind mount if TARDIS_NETWORKFS_HOST_PATH is set
+        if not self.config_handler.add_bind_mount(container_id, namespace):
+            logger.warning("Failed to add bind mount for container %s", container_id)
+            # Continue with create/restore even if bind mount fails
 
         # Then check for checkpoint image
         checkpoint_path = self.config_handler.get_checkpoint_path(container_id, namespace)
@@ -266,7 +266,7 @@ class RuncHandler:
         exit_code = self.state_manager.get_exit_code(namespace, container_id)
         logger.info("Exit code for container %s: %s", container_id, exit_code)
         
-        if exit_code is not None and exit_code == 0:  # Only cleanup checkpoint if exit code is 0
+        if exit_code is not None and exit_code == 0:  # Only cleanup if exit code is 0
             logger.info("Container %s exited successfully with code 0, proceeding with cleanup", container_id)
             
             # Get checkpoint path
@@ -283,6 +283,13 @@ class RuncHandler:
                     logger.warning("Failed to clean up checkpoint for container %s", container_id)
             else:
                 logger.info("No checkpoint path found for container %s, skipping cleanup", container_id)
+                
+            # Delete work directory
+            logger.info("Deleting work directory for container %s", container_id)
+            if self.config_handler.delete_work_directory(container_id, namespace):
+                logger.info("Successfully deleted work directory for container %s", container_id)
+            else:
+                logger.warning("Failed to delete work directory for container %s", container_id)
         
         # Always clear state regardless of exit code
         self.state_manager.clear_state(namespace, container_id)
@@ -297,11 +304,13 @@ class RuncHandler:
         # Get the project root directory (where install.py is located)
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         
-        # Launch event_listener.py as a separate process using python -m
+        # Launch event_listener.py as a separate process
         subprocess.Popen(
             ["python3", "-m", "src.container_handler.event_listener"],
-            cwd=project_root
+            cwd=project_root,
+            env=os.environ.copy()  # Inherit environment for log file path
         )
+        logger.info("Started event listener process")
 
     def intercept_command(self, args: List[str]) -> int:
         """Intercept and process Runc commands."""

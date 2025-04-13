@@ -16,6 +16,7 @@ class ContainerEventListener:
     
     def listen_for_events(self):
         """Listen for container events."""
+        logger.info("TEST EVENT LISTENER STARTED - This should appear in tardis.log")
         logger.info("Launching ctr events process")
         
         # Use the exact command that works in the alternative implementation
@@ -27,16 +28,6 @@ class ContainerEventListener:
             bufsize=1  # Line buffering
         )
         
-        # Write PID to file
-        logger.info("Writing PID to file: %s", EVENT_LISTENER_PID_FILE)
-        try:
-            with open(EVENT_LISTENER_PID_FILE, 'w') as f:
-                f.write(str(process.pid))
-            logger.info("Successfully wrote PID %d to file", process.pid)
-        except Exception as e:
-            logger.error("Failed to write PID to file: %s", e)
-            return
-            
         logger.info("Event listener process started with PID %d", process.pid)
         
         # Process events
@@ -51,6 +42,7 @@ class ContainerEventListener:
             while True:
                 line = process.stdout.readline()
                 if not line:
+                    logger.info("No more output from ctr events, breaking loop")
                     break
                     
                 logger.info("Raw event received: %s", line.strip())
@@ -68,13 +60,6 @@ class ContainerEventListener:
             if process:
                 process.terminate()
                 process.wait()
-                
-            if os.path.exists(EVENT_LISTENER_PID_FILE):
-                try:
-                    os.remove(EVENT_LISTENER_PID_FILE)
-                    logger.info("Removed PID file")
-                except Exception as e:
-                    logger.warning("Failed to remove PID file: %s", e)
     
     def _process_event(self, event_line):
         """Process a single event line."""
@@ -82,91 +67,47 @@ class ContainerEventListener:
             # Log raw event line for debugging
             logger.info("Raw event line: %s", event_line.strip())
             
-            # Try to parse as JSON first
-            json_start = event_line.find('{')
-            if json_start != -1:
-                try:
-                    # Extract parts before JSON
-                    parts_before_json = event_line[:json_start].strip().split()
-                    if len(parts_before_json) >= 4:
-                        # Extract namespace and topic (last two items before JSON)
-                        namespace = parts_before_json[-2]
-                        topic = parts_before_json[-1]
-                        
-                        # Extract JSON data
-                        event_data = event_line[json_start:]
-                        
-                        logger.info("Parsed event - Namespace: %s, Topic: %s", namespace, topic)
-                        
-                        # Only process exit events
-                        if topic == "/tasks/exit":
-                            event = json.loads(event_data)
-                            container_id = event.get("container_id")
-                            exit_code = event.get("exit_status", 0)  # default to 0 if not present
-                            
-                            if container_id:
-                                # Check if we have state for this container
-                                if self.state_manager.has_state(namespace, container_id):
-                                    logger.info("Container %s in namespace %s exited with code %d", 
-                                               container_id, namespace, exit_code)
-                                    self.state_manager.set_exit_code(namespace, container_id, exit_code)
-                                    return
-                except json.JSONDecodeError as e:
-                    logger.error("Failed to parse event JSON: %s", e)
-                    logger.error("Failed event data: %s", event_data)
-                    # Fall back to text parsing
-            
-            # Fall back to text parsing if JSON parsing failed
             # Parse the event line
-            # Format: 2024-02-14T12:34:56.789012345Z namespace=default type=container id=abc123 event=exit
-            parts = event_line.strip().split()
-            if len(parts) < 5:
-                logger.warning("Invalid event format: %s", event_line.strip())
-                return
+            json_start = event_line.find('{')
+            if json_start == -1:
+                logger.info("Skipping non-JSON event: %s", event_line.strip())
+                return  # Not a JSON event, skip
                 
-            # Extract namespace and container ID
-            namespace = None
-            container_id = None
-            for part in parts[1:]:  # Skip timestamp
-                if '=' in part:
-                    key, value = part.split('=', 1)
-                    if key == 'namespace':
-                        namespace = value
-                    elif key == 'id':
-                        container_id = value
-                        
-            if not namespace or not container_id:
-                logger.warning("Missing namespace or container ID in event: %s", event_line.strip())
-                return
+            # Extract parts before JSON
+            parts_before_json = event_line[:json_start].strip().split()
+            if len(parts_before_json) < 4:
+                logger.info("Skipping event with invalid format: %s", event_line.strip())
+                return  # Invalid format, skip
                 
-            # Check if this is an exit event
-            if 'event=exit' not in event_line:
-                return
-                
-            # Check if we have state for this container
-            if not self.state_manager.has_state(namespace, container_id):
-                logger.info("No state file found for container %s in namespace %s, skipping event", 
-                           container_id, namespace)
-                return
-                
-            # Extract exit code from the event
-            exit_code = None
-            for part in parts:
-                if part.startswith('exit-code='):
-                    try:
-                        exit_code = int(part.split('=', 1)[1])
-                    except (ValueError, IndexError):
-                        pass
-                        
-            # If no exit code is found, treat it as 0 (successful exit)
-            if exit_code is None:
-                exit_code = 0
-                logger.info("Container %s in namespace %s exited with no explicit code, treating as 0", 
-                           container_id, namespace)
+            # Extract namespace and topic (last two items before JSON)
+            namespace = parts_before_json[-2]
+            topic = parts_before_json[-1]
             
-            logger.info("Container %s in namespace %s exited with code %d", 
-                       container_id, namespace, exit_code)
-            self.state_manager.set_exit_code(namespace, container_id, exit_code)
+            logger.info("Processing event - Namespace: %s, Topic: %s", namespace, topic)
+            
+            # Only process exit events
+            if topic != "/tasks/exit":
+                logger.info("Skipping non-exit event: %s", topic)
+                return
+                
+            # Extract and parse JSON data
+            event_data = event_line[json_start:]
+            try:
+                event = json.loads(event_data)
+                container_id = event.get("container_id")
+                exit_code = event.get("exit_status", 0)  # default to 0 if not present
+                
+                logger.info("Parsed exit event - Container: %s, Exit Code: %d", container_id, exit_code)
+                
+                if container_id and self.state_manager.has_state(namespace, container_id):
+                    logger.info("Container %s in namespace %s exited with code %d", 
+                               container_id, namespace, exit_code)
+                    self.state_manager.set_exit_code(namespace, container_id, exit_code)
+                else:
+                    logger.info("No state found for container %s in namespace %s", container_id, namespace)
+            except json.JSONDecodeError as e:
+                logger.error("Failed to parse event JSON: %s", e)
+                logger.error("Failed event data: %s", event_data)
                 
         except Exception as e:
             logger.error("Error processing event: %s", e)
@@ -204,6 +145,15 @@ def main():
             logger.error("Failed to restart with sudo: %s", e)
             return
     
+    # Write our PID to file before starting
+    try:
+        with open(EVENT_LISTENER_PID_FILE, 'w') as f:
+            f.write(str(os.getpid()))
+        logger.info("Started new event listener with PID %d", os.getpid())
+    except Exception as e:
+        logger.error("Failed to write PID file: %s", e)
+        return
+    
     state_manager = ContainerStateManager()
     event_listener = ContainerEventListener(state_manager)
     
@@ -217,6 +167,7 @@ def main():
         if os.path.exists(EVENT_LISTENER_PID_FILE):
             try:
                 os.remove(EVENT_LISTENER_PID_FILE)
+                logger.info("Cleaned up PID file")
             except Exception as e:
                 logger.warning("Failed to remove PID file: %s", e)
 

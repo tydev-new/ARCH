@@ -1,5 +1,6 @@
 import os
 import json
+import shutil
 from typing import Dict, Optional, List
 from src.utils.logging import logger
 from src.utils.constants import CONFIG_PATH, DEFAULT_CHECKPOINT_PATH, CONTAINER_CONFIG_PATHS
@@ -88,6 +89,23 @@ class ContainerConfigHandler:
             logger.error(f"Error reading config for container {container_id}: {str(e)}")
             return default
     
+    def _ensure_directory(self, path: str) -> bool:
+        """
+        Create directory if it doesn't exist.
+        
+        Args:
+            path: Directory path to create
+            
+        Returns:
+            bool: True if directory exists or was created, False on error
+        """
+        try:
+            os.makedirs(path, exist_ok=True)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to create directory {path}: {e}")
+            return False
+    
     def is_tardis_enabled(self, container_id: str, namespace: str) -> bool:
         """
         Check if a container is Tardis-enabled.
@@ -131,4 +149,127 @@ class ContainerConfigHandler:
         except Exception as e:
             logger.error(f"Error getting checkpoint path for container {container_id}: {str(e)}")
             return None
+
+    def add_bind_mount(self, container_id: str, namespace: str) -> bool:
+        """
+        Add bind mount to container config if TARDIS_NETWORKFS_HOST_PATH is set.
+        Uses TARDIS_WORKDIR_CONTAINER_PATH as destination, defaults to /tmp if not set.
+        Also sets the working directory to the destination path.
+        
+        Args:
+            container_id: Container ID
+            namespace: Container namespace
+            
+        Returns:
+            bool: True if bind mount added successfully, False otherwise
+        """
+        # Get networkfs path
+        networkfs_path = self._get_env_var_value(container_id, namespace, "TARDIS_NETWORKFS_HOST_PATH", default=None)
+        if not networkfs_path:
+            return True  # No networkfs path, nothing to do
+            
+        # Get destination path from TARDIS_WORKDIR_CONTAINER_PATH, default to /tmp
+        dest_path = self._get_env_var_value(container_id, namespace, "TARDIS_WORKDIR_CONTAINER_PATH", default="/tmp")
+        
+        # Build source path under work directory
+        source_path = os.path.join(networkfs_path, "work", namespace, container_id)
+        
+        # Create work directory
+        if not self._ensure_directory(source_path):
+            logger.warning(f"Failed to create work directory {source_path}")
+            return False
+            
+        # Get config path and runtime directory
+        config_path = self._find_config_path(namespace, container_id)
+        if not config_path:
+            return False
+            
+        # Get runtime directory (parent of config.json)
+        runtime_dir = os.path.dirname(config_path)
+        
+        # Find rootfs directory in runtime directory
+        rootfs_path = os.path.join(runtime_dir, "rootfs")
+        if not os.path.exists(rootfs_path):
+            logger.warning(f"Rootfs directory not found at {rootfs_path}")
+            return False
+            
+        # Check if destination exists in container rootfs
+        dest_in_rootfs = os.path.join(rootfs_path, dest_path.lstrip('/'))
+        if not os.path.exists(dest_in_rootfs):
+            logger.warning(f"Destination path {dest_path} does not exist in container rootfs at {dest_in_rootfs}")
+            return False
+            
+        # Get config
+        config = self._read_config(config_path)
+        if not config:
+            return False
+            
+        # Initialize mounts array if not exists
+        if 'mounts' not in config:
+            config['mounts'] = []
+            
+        # Check if destination is already mounted
+        for mount in config['mounts']:
+            if mount.get('destination') == dest_path:
+                logger.warning(f"Destination path {dest_path} is already mounted to {mount.get('source')}")
+                return False
+            
+        # Check if source path is already mounted
+        for mount in config['mounts']:
+            if mount.get('type') == 'bind' and mount.get('source') == source_path:
+                logger.warning(f"Source path {source_path} is already mounted to {mount.get('destination')}")
+                return False
+            
+        # Add new bind mount
+        config['mounts'].append({
+            'type': 'bind',
+            'source': source_path,
+            'destination': dest_path,
+            'options': ['rbind', 'rw']
+        })
+        
+        # Set working directory
+        if 'process' not in config:
+            config['process'] = {}
+            
+        if 'cwd' in config['process']:
+            logger.warning(f"Working directory already set to {config['process']['cwd']}, updating to {dest_path}")
+            
+        config['process']['cwd'] = dest_path
+        
+        # Write updated config
+        try:
+            with open(config_path, 'w') as f:
+                json.dump(config, f, indent=2)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to update config.json: {e}")
+            return False
+
+    def delete_work_directory(self, container_id: str, namespace: str) -> bool:
+        """
+        Delete work directory for a container.
+        
+        Args:
+            container_id: Container ID
+            namespace: Container namespace
+            
+        Returns:
+            bool: True if directory deleted or doesn't exist, False on error
+        """
+        try:
+            networkfs_path = self._get_env_var_value(container_id, namespace, "TARDIS_NETWORKFS_HOST_PATH", default=None)
+            if not networkfs_path:
+                return True
+                
+            # Only delete work directory
+            work_path = os.path.join(networkfs_path, "work", namespace, container_id)
+            if os.path.exists(work_path):
+                shutil.rmtree(work_path)
+                logger.info(f"Deleted work directory {work_path}")
+                
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete work directory for container {container_id}: {e}")
+            return False
 
