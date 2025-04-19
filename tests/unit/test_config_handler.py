@@ -21,7 +21,7 @@ def setup_and_cleanup_logging():
     # Ensure logs directory exists
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
     # Setup logger with DEBUG level
-    logger = setup_logger('tardis', level=logging.DEBUG)
+    logger = setup_logger('arch', level=logging.DEBUG)
     yield logger
     # Cleanup log file after test
     if os.path.exists(LOG_FILE):
@@ -56,13 +56,13 @@ def temp_test_dir():
         env_vars = config.get('process', {}).get('env', [])
         new_env_vars = []
         for var in env_vars:
-            if not var.startswith(("TARDIS_NETWORKFS_HOST_PATH=", "TARDIS_WORKDIR_CONTAINER_PATH=")):
+            if not var.startswith(("ARCH_SHAREDFS_HOST_PATH=", "ARCH_WORKDIR_CONTAINER_PATH=")):
                 new_env_vars.append(var)
         
         new_env_vars.extend([
-            f"TARDIS_NETWORKFS_HOST_PATH={temp_dir}",
-            "TARDIS_WORKDIR_CONTAINER_PATH=/tmp",
-            "TARDIS_ENABLE=1"
+            f"ARCH_SHAREDFS_HOST_PATH={temp_dir}",
+            "ARCH_WORKDIR_CONTAINER_PATH=/tmp",
+            "ARCH_ENABLE=1"
         ])
         config['process']['env'] = new_env_vars
         
@@ -136,12 +136,14 @@ def test_read_config_io_error(config_handler):
     assert config is None
     assert_log_contains("Failed to read config.json from /nonexistent/path: [Errno 2] No such file or directory: '/nonexistent/path'")
 
-def test_is_tardis_enabled_success(config_handler, temp_test_dir):
-    # Create config with TARDIS_ENABLE=1
+def test_is_arch_enabled_success(config_handler, temp_test_dir):
+    # Create config with ARCH_ENABLE=1
     config = {
         "process": {
             "env": [
-                "TARDIS_ENABLE=1"
+                "ARCH_SHAREDFS_HOST_PATH=/tmp",
+                "ARCH_WORKDIR_CONTAINER_PATH=/tmp",
+                "ARCH_ENABLE=1"
             ]
         }
     }
@@ -153,26 +155,32 @@ def test_is_tardis_enabled_success(config_handler, temp_test_dir):
         
     # Mock _find_config_path to return our test config
     with patch.object(config_handler, '_find_config_path', return_value=config_path):
-        is_enabled = config_handler.is_tardis_enabled("container1", "default")
+        is_enabled = config_handler.is_arch_enabled("container1", "default")
         assert is_enabled is True
 
-def test_is_tardis_enabled_not_found(config_handler, temp_test_dir):
+def test_is_arch_enabled_not_found(config_handler, temp_test_dir):
+    # Create config without ARCH_ENABLE
+    config = {
+        "process": {
+            "env": []
+        }
+    }
     # Mock config paths to use nonexistent path
     with patch('src.container_handler.config_handler.CONTAINER_CONFIG_PATHS', 
               ["/nonexistent/{namespace}/{container_id}/config.json"]):
-        is_enabled = config_handler.is_tardis_enabled("container1", "default")
+        is_enabled = config_handler.is_arch_enabled("container1", "default")
         assert is_enabled is False
 
-def test_is_tardis_enabled_invalid_input(config_handler):
-    is_enabled = config_handler.is_tardis_enabled("", "default")
-    assert is_enabled is False
+def test_is_arch_enabled_invalid_input(config_handler):
+    is_enabled = config_handler.is_arch_enabled("", "default")
+    assert not is_enabled
     assert_log_contains("Invalid container_id or namespace: id=, namespace=default")
 
 def test_get_checkpoint_path_success(config_handler, config_template, temp_container_env):
     """Test get_checkpoint_path with networkfs path"""
     env_vars = [
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-        f"TARDIS_NETWORKFS_HOST_PATH={temp_container_env}"
+        f"ARCH_SHAREDFS_HOST_PATH={temp_container_env}"
     ]
     create_test_config(config_template, env_vars, temp_container_env)
     
@@ -186,17 +194,17 @@ def test_get_checkpoint_path_success(config_handler, config_template, temp_conta
 def test_get_checkpoint_path_not_found(config_handler):
     with patch('os.path.exists', return_value=False):
         path = config_handler.get_checkpoint_path("container1", "default")
-        assert path == "/var/lib/tardis/checkpoint/default/container1"
+        assert path == "/var/lib/arch/checkpoint/default/container1"
 
 def test_get_checkpoint_path_invalid_input(config_handler):
     path = config_handler.get_checkpoint_path("", "default")
-    assert path == "/var/lib/tardis/checkpoint/default/"
+    assert path == "/var/lib/arch/checkpoint/default/"
 
 def test_get_checkpoint_path_read_error(config_handler):
     with patch('os.path.exists', return_value=True), \
          patch('builtins.open', mock_open(read_data="invalid json")):
         path = config_handler.get_checkpoint_path("container1", "default")
-        assert path == "/var/lib/tardis/checkpoint/default/container1"
+        assert path == "/var/lib/arch/checkpoint/default/container1"
 
 def test_ensure_directory_success(config_handler):
     with patch('os.makedirs') as mock_makedirs:
@@ -213,8 +221,8 @@ def test_add_bind_mount_success(config_handler, config_template, temp_container_
     """Test add_bind_mount with valid configuration"""
     env_vars = [
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-        f"TARDIS_NETWORKFS_HOST_PATH={temp_container_env}",
-        "TARDIS_WORKDIR_CONTAINER_PATH=/tmp"
+        f"ARCH_SHAREDFS_HOST_PATH={temp_container_env}",
+        "ARCH_WORKDIR_CONTAINER_PATH=/tmp"
     ]
     config_path = create_test_config(config_template, env_vars, temp_container_env)
     
@@ -254,8 +262,8 @@ def test_add_bind_mount_rootfs_not_found(config_handler, config_template, temp_c
     """Test add_bind_mount when rootfs directory is missing"""
     env_vars = [
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-        f"TARDIS_NETWORKFS_HOST_PATH={temp_container_env}",
-        "TARDIS_WORKDIR_CONTAINER_PATH=/tmp"
+        f"ARCH_SHAREDFS_HOST_PATH={temp_container_env}",
+        "ARCH_WORKDIR_CONTAINER_PATH=/tmp"
     ]
     create_test_config(config_template, env_vars, temp_container_env)
     
@@ -273,8 +281,8 @@ def test_add_bind_mount_destination_not_found(config_handler, config_template, t
     """Test add_bind_mount when destination directory is missing"""
     env_vars = [
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-        f"TARDIS_NETWORKFS_HOST_PATH={temp_container_env}",
-        "TARDIS_WORKDIR_CONTAINER_PATH=/nonexistent"
+        f"ARCH_SHAREDFS_HOST_PATH={temp_container_env}",
+        "ARCH_WORKDIR_CONTAINER_PATH=/nonexistent"
     ]
     create_test_config(config_template, env_vars, temp_container_env)
     
@@ -288,7 +296,7 @@ def test_delete_work_directory_success(config_handler, config_template, temp_con
     """Test delete_work_directory with existing directory"""
     env_vars = [
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-        f"TARDIS_NETWORKFS_HOST_PATH={temp_container_env}"
+        f"ARCH_SHAREDFS_HOST_PATH={temp_container_env}"
     ]
     create_test_config(config_template, env_vars, temp_container_env)
     
@@ -318,7 +326,7 @@ def test_delete_work_directory_not_found(config_handler, config_template, temp_c
     """Test delete_work_directory when directory doesn't exist"""
     env_vars = [
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-        f"TARDIS_NETWORKFS_HOST_PATH={temp_container_env}"
+        f"ARCH_SHAREDFS_HOST_PATH={temp_container_env}"
     ]
     create_test_config(config_template, env_vars, temp_container_env)
     
@@ -401,11 +409,11 @@ def create_test_config(base_config: dict, env_vars: list, temp_dir: str) -> str:
         
     return config_path
 
-def test_is_tardis_enabled_true(config_handler, config_template, temp_container_env):
-    """Test is_tardis_enabled when Tardis is enabled"""
+def test_is_arch_enabled_true(config_handler, config_template, temp_container_env):
+    """Test is_arch_enabled when ARCH is enabled"""
     env_vars = [
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-        "TARDIS_ENABLE=1"
+        "ARCH_ENABLE=1"
     ]
     create_test_config(config_template, env_vars, temp_container_env)
     
@@ -414,13 +422,13 @@ def test_is_tardis_enabled_true(config_handler, config_template, temp_container_
         os.path.join(temp_container_env, "{namespace}", "{container_id}", "config.json")
     ]
     
-    assert config_handler.is_tardis_enabled("container1", "default") is True
+    assert config_handler.is_arch_enabled("container1", "default") is True
 
-def test_is_tardis_enabled_false(config_handler, config_template, temp_container_env):
-    """Test is_tardis_enabled when Tardis is disabled"""
+def test_is_arch_enabled_false(config_handler, config_template, temp_container_env):
+    """Test is_arch_enabled when ARCH is disabled"""
     env_vars = [
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-        "TARDIS_ENABLE=0"
+        "ARCH_ENABLE=0"
     ]
     create_test_config(config_template, env_vars, temp_container_env)
     
@@ -428,21 +436,21 @@ def test_is_tardis_enabled_false(config_handler, config_template, temp_container
         os.path.join(temp_container_env, "{namespace}", "{container_id}", "config.json")
     ]
     
-    assert config_handler.is_tardis_enabled("container1", "default") is False
+    assert config_handler.is_arch_enabled("container1", "default") is False
 
-def test_is_tardis_enabled_not_found(config_handler, temp_container_env):
-    """Test is_tardis_enabled when config not found"""
+def test_is_arch_enabled_not_found(config_handler, temp_container_env):
+    """Test is_arch_enabled when config not found"""
     config_handler.possible_config_paths = [
         os.path.join(temp_container_env, "{namespace}", "{container_id}", "config.json")
     ]
     
-    assert config_handler.is_tardis_enabled("container1", "default") is False
+    assert config_handler.is_arch_enabled("container1", "default") is False
 
 def test_get_checkpoint_path_networkfs(config_handler, config_template, temp_container_env):
     """Test get_checkpoint_path with networkfs path"""
     env_vars = [
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-        f"TARDIS_NETWORKFS_HOST_PATH={temp_container_env}"
+        f"ARCH_SHAREDFS_HOST_PATH={temp_container_env}"
     ]
     create_test_config(config_template, env_vars, temp_container_env)
     
@@ -457,7 +465,7 @@ def test_get_checkpoint_path_host(config_handler, config_template, temp_containe
     """Test get_checkpoint_path with checkpoint host path"""
     env_vars = [
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-        f"TARDIS_CHECKPOINT_HOST_PATH={temp_container_env}"
+        f"ARCH_CHECKPOINT_HOST_PATH={temp_container_env}"
     ]
     create_test_config(config_template, env_vars, temp_container_env)
     
@@ -477,5 +485,5 @@ def test_get_checkpoint_path_default(config_handler, config_template, temp_conta
         os.path.join(temp_container_env, "{namespace}", "{container_id}", "config.json")
     ]
     
-    expected_path = os.path.join("/var/lib/tardis/checkpoint", "default", "container1")
+    expected_path = os.path.join("/var/lib/arch/checkpoint", "default", "container1")
     assert config_handler.get_checkpoint_path("container1", "default") == expected_path 

@@ -1,15 +1,15 @@
-"""Constants used across the Tardis codebase."""
+"""Constants used across the ARCH codebase."""
 
 import os
 
-# Installation paths and configuration
-CONFIG_DIR = "/etc/tardis"
-CONFIG_PATH = os.path.join(CONFIG_DIR, "tardis.env")
-STATE_DIR = "/var/lib/tardis/state"
-DEFAULT_CHECKPOINT_PATH = "/var/lib/tardis/checkpoint"
+# Configuration paths
+CONFIG_DIR = "/etc/arch"
+CONFIG_PATH = os.path.join(CONFIG_DIR, "arch.env")
+STATE_DIR = "/var/lib/arch/state"
+DEFAULT_CHECKPOINT_PATH = "/var/lib/arch/checkpoint"
 
 # Environment variables
-ENV_REAL_RUNC_CMD = "TARDIS_REAL_RUNC_CMD"
+ENV_REAL_RUNC_CMD = "ARCH_REAL_RUNC_CMD"
 
 # Runc command related
 INTERCEPTABLE_COMMANDS = {'create', 'start', 'delete', 'checkpoint', 'resume'}
@@ -50,4 +50,4 @@ CONTAINER_ROOTFS_PATHS = [
 ] 
 
 # Logging
-LOG_FILE = "logs/tardis.log"
+LOG_FILE = "logs/arch.log"

@@ -7,14 +7,14 @@ from src.container_handler.flag_manager import ContainerFlagManager
 @pytest.fixture
 def state_manager():
     """Create a ContainerFlagManager instance with a temporary directory."""
-    with patch('src.container_handler.flag_manager.STATE_DIR', '/tmp/tardis/state'):
-        manager = ContainerFlagManager(state_dir='/tmp/tardis/state')
+    with patch('src.container_handler.flag_manager.STATE_DIR', '/tmp/arch/state'):
+        manager = ContainerFlagManager(state_dir='/tmp/arch/state')
+        # Clean up any existing test files
+        if os.path.exists('/tmp/arch/state'):
+            for file in os.listdir('/tmp/arch/state'):
+                os.remove(os.path.join('/tmp/arch/state', file))
+            os.rmdir('/tmp/arch/state')
         yield manager
-        # Cleanup
-        if os.path.exists('/tmp/tardis/state'):
-            for file in os.listdir('/tmp/tardis/state'):
-                os.remove(os.path.join('/tmp/tardis/state', file))
-            os.rmdir('/tmp/tardis/state')
 
 def test_create_state(state_manager):
     """Test creating state for a container."""

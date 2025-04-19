@@ -48,7 +48,7 @@ def temp_dir():
         yield tmp_path
 
 def get_state_file(namespace, container_id):
-    return f"/tmp/tardis/state/{namespace}_{container_id}.json"
+    return f"/tmp/arch/state/{namespace}_{container_id}.json"
 
 @pytest.fixture
 def runc_handler():
@@ -93,11 +93,11 @@ def test_intercept_command_non_interceptable(runc_handler):
         result = runc_handler.intercept_command(args)
         assert result == 1  # Because exec failed
 
-def test_intercept_command_not_tardis_enabled(runc_handler):
-    """Test handling of commands for non-Tardis containers."""
+def test_intercept_command_not_arch_enabled(runc_handler):
+    """Test handling of commands for non-ARCH containers."""
     args = ["runc", "create", "container1"]
     with patch.object(runc_handler.parser, 'parse_command', return_value=("create", {}, {}, "container1", "default")), \
-         patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=False), \
+         patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=False), \
          patch('os.execvp') as mock_exec:
         mock_exec.side_effect = Exception("Exec would have replaced process")
         result = runc_handler.intercept_command(args)
@@ -108,7 +108,7 @@ def test_intercept_command_create(runc_handler):
     args = ["runc", "create", "container1"]
     
     with patch.object(runc_handler.parser, 'parse_command', return_value=("create", {}, {}, "container1", "default")), \
-         patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+         patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
          patch.object(runc_handler, '_get_container_paths', return_value=(None, None)), \
          patch('os.execvp') as mock_exec:
         mock_exec.side_effect = Exception("Exec called")
@@ -122,7 +122,7 @@ def test_intercept_command_checkpoint(runc_handler):
     args = ["runc", "checkpoint", "container1"]
     
     with patch.object(runc_handler.parser, 'parse_command', return_value=("checkpoint", {}, {}, "container1", "default")), \
-         patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+         patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
          patch('os.execvp') as mock_exec:
         mock_exec.side_effect = Exception("Exec called")
         result = runc_handler.intercept_command(args)
@@ -134,7 +134,7 @@ def test_intercept_command_start(runc_handler):
     args = ["runc", "start", "container1"]
     
     with patch.object(runc_handler.parser, 'parse_command', return_value=("start", {}, {}, "container1", "default")), \
-         patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+         patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
          patch('os.execvp') as mock_exec:
         
         runc_handler.state_manager.create_state("default", "container1")
@@ -149,7 +149,7 @@ def test_intercept_command_resume(runc_handler):
     args = ["runc", "resume", "container1"]
     
     with patch.object(runc_handler.parser, 'parse_command', return_value=("resume", {}, {}, "container1", "default")), \
-         patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+         patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
          patch('os.execvp') as mock_exec:
         mock_exec.side_effect = Exception("Exec called")
         result = runc_handler.intercept_command(args)
@@ -161,7 +161,7 @@ def test_intercept_command_delete(runc_handler):
     args = ["runc", "delete", "container1"]
     
     with patch.object(runc_handler.parser, 'parse_command', return_value=("delete", {}, {}, "container1", "default")), \
-         patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+         patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
          patch.object(runc_handler, '_get_container_runtime_state', return_value="stopped"), \
          patch('os.execvp') as mock_exec:
         mock_exec.side_effect = Exception("Exec called")
@@ -183,7 +183,7 @@ def test_intercept_command_create_with_options(runc_handler):
             "create", "--bundle", "/path/to/bundle", "container1"]
     
     with patch.object(runc_handler.parser, 'parse_command', return_value=("create", {}, {"--bundle": "/path/to/bundle"}, "container1", "default")), \
-         patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+         patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
          patch.object(runc_handler.config_handler, 'get_checkpoint_path', return_value=None), \
          patch('os.execvp') as mock_exec:
         
@@ -198,7 +198,7 @@ def test_intercept_command_checkpoint_with_options(runc_handler):
             "checkpoint", "--work-path", "/tmp/work", "--leave-running", "container1"]
     
     with patch.object(runc_handler.parser, 'parse_command', return_value=("checkpoint", {}, {"--work-path": "/tmp/work", "--leave-running": ""}, "container1", "default")), \
-         patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+         patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
          patch.object(runc_handler.config_handler, 'get_checkpoint_path', return_value="/path/to/checkpoint"), \
          patch.object(runc_handler.filesystem_handler, 'get_upperdir', return_value="/path/to/upperdir"), \
          patch.object(runc_handler.checkpoint_handler, 'save_checkpoint_file', return_value=True), \
@@ -216,7 +216,7 @@ def test_intercept_command_start_with_options(runc_handler):
             "start", "--detach", "container1"]
     
     with patch.object(runc_handler.parser, 'parse_command', return_value=("start", {}, {"--detach": ""}, "container1", "default")), \
-         patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+         patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
          patch('os.execvp') as mock_exec:
         
         runc_handler.state_manager.create_state("default", "container1")
@@ -232,7 +232,7 @@ def test_intercept_command_resume_with_options(runc_handler):
             "resume", "--bundle", "/path/to/bundle", "container1"]
     
     with patch.object(runc_handler.parser, 'parse_command', return_value=("resume", {}, {"--bundle": "/path/to/bundle"}, "container1", "default")), \
-         patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+         patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
          patch('os.execvp') as mock_exec:
         
         runc_handler.state_manager.create_state("default", "container1")
@@ -248,7 +248,7 @@ def test_intercept_command_delete_with_options(runc_handler):
             "delete", "--force", "container1"]
     
     with patch.object(runc_handler.parser, 'parse_command', return_value=("delete", {}, {"--force": ""}, "container1", "default")), \
-         patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+         patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
          patch.object(runc_handler.state_manager, 'get_exit_code', return_value=0), \
          patch.object(runc_handler.config_handler, 'get_checkpoint_path', return_value="/path/to/checkpoint"), \
          patch.object(runc_handler.checkpoint_handler, 'cleanup_checkpoint', return_value=True), \
@@ -266,7 +266,7 @@ def test_intercept_command_create_failed_restore(runc_handler):
     args = ["runc", "create", "container1"]
     
     with patch.object(runc_handler.parser, 'parse_command', return_value=("create", {}, {}, "container1", "default")), \
-         patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+         patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
          patch.object(runc_handler.config_handler, 'add_bind_mount', return_value=True), \
          patch.object(runc_handler.config_handler, 'get_checkpoint_path', return_value="/path/to/checkpoint"), \
          patch.object(runc_handler.checkpoint_handler, 'validate_checkpoint', return_value=True), \
@@ -285,11 +285,11 @@ def test_intercept_command_create_failed_restore(runc_handler):
 class TestRuncHandler:
     """Test RuncHandler focusing on public methods and real components where possible."""
     
-    def test_intercept_non_tardis_command(self, runc_handler):
-        """Test handling of commands for non-Tardis containers."""
+    def test_intercept_non_arch_command(self, runc_handler):
+        """Test handling of commands for non-ARCH containers."""
         args = ["runc", "create", "container1"]
         with patch.object(runc_handler.parser, 'parse_command', return_value=("create", {}, {}, "container1", "default")), \
-             patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=False), \
+             patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=False), \
              patch('os.execvp') as mock_exec:
             mock_exec.side_effect = Exception("Exec called")
             result = runc_handler.intercept_command(args)
@@ -307,7 +307,7 @@ class TestRuncHandler:
         
         with patch.object(runc_handler.parser, 'parse_command',
                          return_value=("create", {"bundle": str(bundle_dir)}, {}, container_id, namespace)), \
-             patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+             patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
              patch.object(runc_handler.checkpoint_handler, 'validate_checkpoint', return_value=True), \
              patch.object(runc_handler.checkpoint_handler, 'restore_checkpoint_file', return_value=True), \
              patch('os.execvp') as mock_exec:
@@ -327,7 +327,7 @@ class TestRuncHandler:
         
         with patch.object(runc_handler.parser, 'parse_command',
                          return_value=("create", {"bundle": str(bundle_dir)}, {}, container_id, namespace)), \
-             patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+             patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
              patch.object(runc_handler.checkpoint_handler, 'validate_checkpoint', return_value=False), \
              patch('os.execvp') as mock_exec:
             mock_exec.side_effect = Exception("Exec called")
@@ -346,7 +346,7 @@ class TestRuncHandler:
         
         with patch.object(runc_handler.parser, 'parse_command',
                          return_value=("create", {"bundle": str(bundle_dir)}, {}, container_id, namespace)), \
-             patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+             patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
              patch.object(runc_handler.checkpoint_handler, 'validate_checkpoint', return_value=True), \
              patch.object(runc_handler.checkpoint_handler, 'restore_checkpoint_file', return_value=False), \
              patch('os.execvp') as mock_exec:
@@ -367,7 +367,7 @@ class TestRuncHandler:
         
         with patch.object(runc_handler.parser, 'parse_command',
                          return_value=("checkpoint", {}, {}, container_id, namespace)), \
-             patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+             patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
              patch.object(runc_handler.config_handler, 'get_checkpoint_path',
                          return_value=str(temp_dir / "checkpoints" / namespace / container_id)), \
              patch.object(runc_handler.filesystem_handler, 'get_upperdir', return_value="/path/to/upperdir"), \
@@ -392,7 +392,7 @@ class TestRuncHandler:
         
         with patch.object(runc_handler.parser, 'parse_command',
                          return_value=("delete", {}, {}, container_id, namespace)), \
-             patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+             patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
              patch.object(runc_handler.state_manager, 'get_exit_code', return_value=0), \
              patch.object(runc_handler, '_get_container_runtime_state', return_value="stopped"), \
              patch.object(runc_handler.config_handler, 'get_checkpoint_path',
@@ -418,7 +418,7 @@ class TestRuncHandler:
         
         with patch.object(runc_handler.parser, 'parse_command',
                          return_value=("start", {}, {}, container_id, namespace)), \
-             patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+             patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
              patch('os.execvp') as mock_exec:
             mock_exec.side_effect = Exception("Exec called")
             result = runc_handler.intercept_command(args)
@@ -438,7 +438,7 @@ class TestRuncHandler:
         
         with patch.object(runc_handler.parser, 'parse_command',
                          return_value=("resume", {}, {}, container_id, namespace)), \
-             patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+             patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
              patch('os.execvp') as mock_exec:
             mock_exec.side_effect = Exception("Exec called")
             result = runc_handler.intercept_command(args)
@@ -460,7 +460,7 @@ class TestRuncHandler:
         
         with patch.object(runc_handler.parser, 'parse_command',
                          return_value=("create", {}, {}, container_id, namespace)), \
-             patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+             patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
              patch.object(runc_handler.config_handler, 'add_bind_mount', return_value=False), \
              patch('os.execvp') as mock_exec:
             mock_exec.side_effect = Exception("Exec called")
@@ -486,7 +486,7 @@ class TestRuncHandler:
         
         with patch.object(runc_handler.parser, 'parse_command',
                          return_value=("create", {}, {"--bundle": str(bundle_dir)}, container_id, namespace)), \
-             patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+             patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
              patch.object(runc_handler.config_handler, 'get_checkpoint_path',
                          return_value=str(checkpoint_path)), \
              patch.object(runc_handler.checkpoint_handler, 'validate_checkpoint', return_value=True), \
@@ -522,7 +522,7 @@ class TestRuncHandler:
         
         with patch.object(runc_handler.parser, 'parse_command',
                          return_value=("create", {"bundle": str(bundle_dir)}, {}, container_id, namespace)), \
-             patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+             patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
              patch.object(runc_handler, '_get_container_paths',
                          return_value={"bundle": str(bundle_dir), "checkpoint": None}), \
              patch('os.execvp') as mock_exec:
@@ -559,7 +559,7 @@ class TestRuncHandler:
                     "create", "--bundle", "/path/to/bundle", "--flag", "flag1", container_id]
             
             with patch.object(runc_handler.parser, 'parse_command', return_value=("create", {}, {"--bundle": "/path/to/bundle", "--flag": "flag1"}, container_id, namespace)), \
-                 patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+                 patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
                  patch.object(runc_handler.config_handler, 'get_checkpoint_path', return_value=None), \
                  patch('os.execvp') as mock_exec:
                 
@@ -578,7 +578,7 @@ class TestRuncHandler:
                     "delete", "--force", "--flag", "flag1", container_id]
             
             with patch.object(runc_handler.parser, 'parse_command', return_value=("delete", {}, {"--force": "", "--flag": "flag1"}, container_id, namespace)), \
-                 patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+                 patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
                  patch.object(runc_handler.state_manager, 'get_exit_code', return_value=0), \
                  patch.object(runc_handler.config_handler, 'get_checkpoint_path', return_value="/path/to/checkpoint"), \
                  patch.object(runc_handler.checkpoint_handler, 'cleanup_checkpoint', return_value=True), \
@@ -665,7 +665,7 @@ class TestRuncHandler:
                     "create", "--bundle", "/path/to/bundle", "--flag", "", container_id]
             
             with patch.object(runc_handler.parser, 'parse_command', return_value=("create", {}, {"--bundle": "/path/to/bundle", "--flag": ""}, container_id, namespace)), \
-                 patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+                 patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
                  patch.object(runc_handler.config_handler, 'get_checkpoint_path', return_value=None), \
                  patch('os.execvp') as mock_exec:
                 
@@ -684,7 +684,7 @@ class TestRuncHandler:
                     "delete", "--force", "--flag", "", container_id]
             
             with patch.object(runc_handler.parser, 'parse_command', return_value=("delete", {}, {"--force": "", "--flag": ""}, container_id, namespace)), \
-                 patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+                 patch.object(runc_handler.config_handler, 'is_arch_enabled', return_value=True), \
                  patch.object(runc_handler.state_manager, 'get_exit_code', return_value=0), \
                  patch.object(runc_handler.config_handler, 'get_checkpoint_path', return_value="/path/to/checkpoint"), \
                  patch.object(runc_handler.checkpoint_handler, 'cleanup_checkpoint', return_value=True), \

@@ -107,19 +107,19 @@ class ContainerConfigHandler:
             logger.error(f"Failed to create directory {path}: {e}")
             return False
     
-    def is_tardis_enabled(self, container_id: str, namespace: str) -> bool:
+    def is_arch_enabled(self, container_id: str, namespace: str) -> bool:
         """
-        Check if a container is Tardis-enabled.
+        Check if a container is ARCH-enabled.
         
         Args:
             container_id: Container ID
             namespace: Container namespace
             
         Returns:
-            bool: True if Tardis is enabled, False otherwise
+            bool: True if ARCH is enabled, False otherwise
         """
-        is_enabled = self._get_env_var_value(container_id, namespace, "TARDIS_ENABLE") == "1"
-        logger.info(f"Container {container_id} is Tardis-enabled" if is_enabled else f"Container {container_id} is not Tardis-enabled")
+        is_enabled = self._get_env_var_value(container_id, namespace, "ARCH_ENABLE") == "1"
+        logger.info(f"Container {container_id} is ARCH-enabled" if is_enabled else f"Container {container_id} is not ARCH-enabled")
         return is_enabled
 
     def get_checkpoint_path(self, container_id: str, namespace: str) -> Optional[str]:
@@ -134,13 +134,13 @@ class ContainerConfigHandler:
             Optional[str]: Checkpoint path if found, None otherwise
         """
         try:
-            # Check networkfs path first
-            networkfs_path = self._get_env_var_value(container_id, namespace, "TARDIS_NETWORKFS_HOST_PATH", default=None)
-            if networkfs_path:
-                return os.path.join(networkfs_path, "checkpoint", namespace, container_id)
+            # Check sharedfs path first
+            sharedfs_path = self._get_env_var_value(container_id, namespace, "ARCH_SHAREDFS_HOST_PATH", default=None)
+            if sharedfs_path:
+                return os.path.join(sharedfs_path, "checkpoint", namespace, container_id)
             
             # Then checkpoint host path
-            checkpoint_path = self._get_env_var_value(container_id, namespace, "TARDIS_CHECKPOINT_HOST_PATH", default=None)
+            checkpoint_path = self._get_env_var_value(container_id, namespace, "ARCH_CHECKPOINT_HOST_PATH", default=None)
             if checkpoint_path:
                 return os.path.join(checkpoint_path, namespace, container_id)
             
@@ -153,8 +153,8 @@ class ContainerConfigHandler:
 
     def add_bind_mount(self, container_id: str, namespace: str) -> bool:
         """
-        Add bind mount to container config if TARDIS_NETWORKFS_HOST_PATH is set.
-        Uses TARDIS_WORKDIR_CONTAINER_PATH as destination, defaults to /tmp if not set.
+        Add bind mount to container config if ARCH_SHAREDFS_HOST_PATH is set.
+        Uses ARCH_WORKDIR_CONTAINER_PATH as destination, defaults to /tmp if not set.
         Also sets the working directory to the destination path.
         
         Args:
@@ -164,16 +164,15 @@ class ContainerConfigHandler:
         Returns:
             bool: True if bind mount added successfully, False otherwise
         """
-        # Get networkfs path
-        networkfs_path = self._get_env_var_value(container_id, namespace, "TARDIS_NETWORKFS_HOST_PATH", default=None)
-        if not networkfs_path:
-            return True  # No networkfs path, nothing to do
+        sharedfs_path = self._get_env_var_value(container_id, namespace, "ARCH_SHAREDFS_HOST_PATH", default=None)
+        if not sharedfs_path:
+            return True  # No sharedfs path, nothing to do
             
-        # Get destination path from TARDIS_WORKDIR_CONTAINER_PATH, default to /tmp
-        dest_path = self._get_env_var_value(container_id, namespace, "TARDIS_WORKDIR_CONTAINER_PATH", default="/tmp")
+        # Get destination path from ARCH_WORKDIR_CONTAINER_PATH, default to /tmp
+        dest_path = self._get_env_path(container_id, namespace, "ARCH_WORKDIR_CONTAINER_PATH", default="/tmp")
         
         # Build source path under work directory
-        source_path = os.path.join(networkfs_path, "work", namespace, container_id)
+        source_path = os.path.join(sharedfs_path, "work", namespace, container_id)
         
         # Create work directory
         if not self._ensure_directory(source_path):
@@ -258,13 +257,13 @@ class ContainerConfigHandler:
         Returns:
             bool: True if directory deleted or doesn't exist, False on error
         """
-        # Get networkfs path
-        networkfs_path = self._get_env_var_value(container_id, namespace, "TARDIS_NETWORKFS_HOST_PATH", default=None)
-        if not networkfs_path:
-            return True  # No networkfs path, nothing to do
+        # Get sharedfs path
+        sharedfs_path = self._get_env_var_value(container_id, namespace, "ARCH_SHAREDFS_HOST_PATH", default=None)
+        if not sharedfs_path:
+            return True  # No sharedfs path, nothing to do
             
         # Build work directory path
-        work_dir = os.path.join(networkfs_path, "work", namespace, container_id)
+        work_dir = os.path.join(sharedfs_path, "work", namespace, container_id)
         
         # Delete work directory if it exists
         try:
@@ -278,7 +277,7 @@ class ContainerConfigHandler:
 
     def has_bind_mount(self, container_id: str, namespace: str) -> bool:
         """
-        Check if a container has a bind mount by checking if TARDIS_NETWORKFS_HOST_PATH is set.
+        Check if a container has a bind mount by checking if ARCH_SHAREDFS_HOST_PATH is set.
         
         Args:
             container_id: Container ID
@@ -287,6 +286,6 @@ class ContainerConfigHandler:
         Returns:
             bool: True if container has bind mount, False otherwise
         """
-        networkfs_path = self._get_env_var_value(container_id, namespace, "TARDIS_NETWORKFS_HOST_PATH", default=None)
-        return networkfs_path is not None
+        sharedfs_path = self._get_env_var_value(container_id, namespace, "ARCH_SHAREDFS_HOST_PATH", default=None)
+        return sharedfs_path is not None
 

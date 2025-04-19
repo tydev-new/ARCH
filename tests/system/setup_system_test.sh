@@ -66,10 +66,11 @@ fi
 echo "Start container task ..."
 #echo "sudo ctr run --detach --mount type=bind,src=$MYEBS_MOUNT_PATH,dst=/tmp,options=rbind --cwd /tmp docker.io/library/$IMAGE_ID:latest $CONTAINER_ID"
 #if ! sudo ctr run --detach --mount type=bind,src=$MYEBS_MOUNT_PATH,dst=/tmp,options=rbind --cwd /tmp docker.io/library/"$IMAGE_ID":latest "$CONTAINER_ID"; then
-#if ! sudo ctr run --detach --env TARDIS_ENABLE=1 --env TARDIS_CHECKPOINT_HOST_PATH=$BASE_PATH/data/checkpoints --env TARDIS_ENABLE_MANAGED_EBS=1 --env TARDIS_MANAGED_EBS_SIZE_GB=2 --env TARDIS_MANAGED_EBS_MOUNT_PATH=/tmp docker.io/library/"$IMAGE_ID":latest "$CONTAINER_ID"; then
-#if ! sudo ctr run --detach --env TARDIS_ENABLE=1 --env TARDIS_CHECKPOINT_HOST_PATH=$BASE_PATH docker.io/library/"$IMAGE_ID":latest "$CONTAINER_ID"; then
-if ! sudo ctr run --detach --env TARDIS_ENABLE=1 --env TARDIS_NETWORKFS_HOST_PATH=$BASE_PATH docker.io/library/"$IMAGE_ID":latest "$CONTAINER_ID"; then
-  error_exit $LINENO
+#if ! sudo ctr run --detach --env ARCH_ENABLE=1 --env ARCH_CHECKPOINT_HOST_PATH=$BASE_PATH/data/checkpoints --env ARCH_ENABLE_MANAGED_EBS=1 --env ARCH_MANAGED_EBS_SIZE_GB=2 --env ARCH_MANAGED_EBS_MOUNT_PATH=/tmp docker.io/library/"$IMAGE_ID":latest "$CONTAINER_ID"; then
+#if ! sudo ctr run --detach --env ARCH_ENABLE=1 --env ARCH_CHECKPOINT_HOST_PATH=$BASE_PATH docker.io/library/"$IMAGE_ID":latest "$CONTAINER_ID"; then
+if ! sudo ctr run --detach --env ARCH_ENABLE=1 --env ARCH_SHAREDFS_HOST_PATH=$BASE_PATH docker.io/library/"$IMAGE_ID":latest "$CONTAINER_ID"; then
+    echo "Failed to start container"
+    exit 1
 fi
 
 echo "Setup script complete."

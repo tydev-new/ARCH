@@ -6,8 +6,8 @@ from src.utils.logging import logger
 from src.container_handler.flag_manager import ContainerFlagManager
 from src.container_handler.runtime_state import ContainerRuntimeState
 
-def get_tardis_containers() -> List[Dict[str, str]]:
-    """Get list of tardis-enabled containers."""
+def get_arch_containers() -> List[Dict[str, str]]:
+    """Get list of arch-enabled containers."""
     flag_manager = ContainerFlagManager()
     containers = []
     
@@ -71,13 +71,13 @@ def finalize_container(container_id: str, namespace: str) -> bool:
         return False
 
 def main():
-    """Main function to finalize all tardis-enabled containers."""
-    containers = get_tardis_containers()
+    """Main function to finalize all arch-enabled containers."""
+    containers = get_arch_containers()
     if not containers:
-        logger.info("No tardis-enabled containers found")
+        logger.info("No arch-enabled containers found")
         return 0
         
-    logger.info("Found %d tardis-enabled containers to finalize", len(containers))
+    logger.info("Found %d arch-enabled containers to finalize", len(containers))
     
     success = True
     for container in containers:

@@ -19,10 +19,10 @@ def test_setup_logger_custom_level():
     assert logger.level == logging.DEBUG
 
 def test_setup_logger_env_level():
-    os.environ['TARDIS_LOG_LEVEL'] = 'DEBUG'
+    os.environ['ARCH_LOG_LEVEL'] = 'DEBUG'
     logger = setup_logger('test_env')
     assert logger.level == logging.DEBUG
-    os.environ.pop('TARDIS_LOG_LEVEL', None)
+    os.environ.pop('ARCH_LOG_LEVEL', None)
 
 def test_setup_logger_with_file():
     with tempfile.NamedTemporaryFile() as temp_file:

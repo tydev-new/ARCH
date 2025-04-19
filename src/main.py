@@ -5,11 +5,11 @@ from src.utils.logging import logger
 
 def main():
     """
-    Main entry point for Tardis Runc wrapper.
+    Main entry point for ARCH Runc wrapper.
     Intercepts and handles Runc commands.
     """
     try:
-        logger.info("Tardis starting, intercepting command: %s", " ".join(sys.argv))
+        logger.info("ARCH starting, intercepting command: %s", " ".join(sys.argv))
         handler = RuncHandler()
         logger.info("RuncHandler initialized, processing command")
         exit_code = handler.intercept_command(sys.argv)

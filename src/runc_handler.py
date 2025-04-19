@@ -114,7 +114,7 @@ class RuncHandler:
             logger.info("No checkpoint found for container %s, proceeding with create", container_id)
             return self._execute_command(arg)
 
-        # Add bind mount if TARDIS_NETWORKFS_HOST_PATH is set
+        # Add bind mount if ARCH_SHAREDFS_HOST_PATH is set
         if not self.config_handler.add_bind_mount(container_id, namespace):
             logger.warning("Failed to add bind mount for container %s, falling back to create", container_id)
             return self._execute_command(arg)
@@ -256,9 +256,9 @@ class RuncHandler:
                 logger.info("Command %s not intercepted, passing through", subcommand)
                 return self._execute_command(args[1:])
             
-            # Check if container is Tardis-enabled
-            if not self.config_handler.is_tardis_enabled(container_id, namespace):
-                logger.info("Container %s not Tardis-enabled, passing through", container_id)
+            # Check if container is ARCH-enabled
+            if not self.config_handler.is_arch_enabled(container_id, namespace):
+                logger.info("Container %s not ARCH-enabled, passing through", container_id)
                 return self._execute_command(args[1:])
 
             # Check if state exists, if not create it

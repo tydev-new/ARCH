@@ -24,7 +24,7 @@ def setup_logger(name: str, level: Optional[int] = None, log_file: str = LOG_FIL
     logger = logging.getLogger(name)
     
     if level is None:
-        level = os.environ.get('TARDIS_LOG_LEVEL', 'INFO').upper()
+        level = os.environ.get('ARCH_LOG_LEVEL', 'INFO').upper()
         level = getattr(logging, level, logging.INFO)
     
     logger.setLevel(level)
@@ -58,6 +58,6 @@ def setup_logger(name: str, level: Optional[int] = None, log_file: str = LOG_FIL
     return logger
 
 # Create default logger for the application
-logger = setup_logger('tardis')
+logger = setup_logger('arch')
 
 

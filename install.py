@@ -43,7 +43,7 @@ def find_runc_path() -> str:
     raise FileNotFoundError("Could not find runc binary using which command")
 
 def is_already_installed() -> bool:
-    """Check if Tardis is already installed"""
+    """Check if ARCH is already installed"""
     try:
         # Check environment variable
         backup_path = os.environ.get(ENV_REAL_RUNC_CMD)
@@ -68,7 +68,7 @@ def is_already_installed() -> bool:
             logger.info("runc is not a file")
             return False
             
-        logger.info("Installation found")
+        logger.info("ARCH is already installed")
         return True
     except Exception as e:
         logger.info(f"Error checking installation: {str(e)}")
@@ -79,7 +79,7 @@ def install_wrapper():
     try:
         # Check if already installed
         if is_already_installed():
-            logger.info("Tardis is already installed")
+            logger.info("ARCH is already installed")
             return True
             
         # Find real runc path
@@ -104,7 +104,7 @@ def install_wrapper():
         
         # Install wrapper script
         wrapper_content = f"""#!/bin/sh
-# Tardis wrapper for runc
+# ARCH wrapper for runc
 MAIN_SCRIPT="{os.path.dirname(os.path.dirname(os.path.abspath(__file__)))}/src/main.py"
 REAL_RUNC="{backup_path}"
 
@@ -131,7 +131,7 @@ def cleanup_runc_wrapper():
     try:
         # Check if already installed
         if not is_already_installed():
-            logger.info("Tardis is not installed, nothing to clean up")
+            logger.info("ARCH is not installed, nothing to clean up")
             return True
             
         # Find the real runc binary
@@ -162,7 +162,7 @@ def cleanup_runc_wrapper():
         return False
 
 def uninstall():
-    """Uninstall Tardis"""
+    """Uninstall ARCH"""
     try:
         # Clean up runc wrapper
         if not cleanup_runc_wrapper():
@@ -174,11 +174,11 @@ def uninstall():
             os.rmdir(CONFIG_DIR)
             logger.info(f"Removed empty directory {CONFIG_DIR}")
             
-        logger.info("Tardis uninstallation complete")
+        logger.info("ARCH uninstallation complete")
         return True
         
     except Exception as e:
-        logger.error(f"Failed to uninstall Tardis: {str(e)}")
+        logger.error(f"Failed to uninstall ARCH: {str(e)}")
         return False
 
 def check_runc_dependency():
@@ -186,7 +186,7 @@ def check_runc_dependency():
     try:
         find_runc_path()
     except FileNotFoundError as e:
-        logger.error("Critical dependency 'runc' not found. Tardis requires runc to be installed.")
+        logger.error("Critical dependency 'runc' not found. ARCH requires runc to be installed.")
         logger.error("Please install runc first: https://github.com/opencontainers/runc")
         sys.exit(1)
 
