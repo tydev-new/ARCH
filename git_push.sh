@@ -32,7 +32,8 @@ read -p "Enter commit message: " COMMIT_MSG
 # Commit changes
 git commit -m "$COMMIT_MSG"
 
-# Push to remote
-git push
+# Push to remote using git directly
+echo "Pushing changes..."
+git push origin main
 
 echo "Changes pushed successfully" 
