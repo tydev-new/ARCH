@@ -18,6 +18,10 @@ from src.runc_handler import RuncHandler
 from src.utils.constants import ENV_REAL_RUNC_CMD, CONFIG_PATH, INTERCEPTABLE_COMMANDS
 from src.runc_command_parser import RuncCommandParser
 from src.container_handler.state_manager import ContainerStateManager
+from src.container_handler.config_handler import ContainerConfigHandler
+from src.container_handler.flag_manager import ContainerFlagManager
+from src.container_handler.filesystem_handler import ContainerFilesystemHandler
+from src.checkpoint_handler import CheckpointHandler
 
 @pytest.fixture(autouse=True)
 def setup_and_teardown(temp_dir):
@@ -43,22 +47,13 @@ def temp_dir():
         (tmp_path / "work").mkdir(parents=True, exist_ok=True)
         yield tmp_path
 
+def get_state_file(namespace, container_id):
+    return f"/tmp/tardis/state/{namespace}_{container_id}.json"
+
 @pytest.fixture
-def runc_handler(temp_dir):
-    """Create RuncHandler with minimal mocking."""
-    state_dir = temp_dir / "state"
-    state_dir.mkdir(exist_ok=True)
-    
-    def get_state_file(self, namespace, container_id):
-        return os.path.join(str(state_dir), f"{namespace}_{container_id}.json")
-    
-    with patch('src.runc_handler.os.environ.get', return_value='/usr/bin/runc'), \
-         patch.dict(os.environ, {
-             'TARDIS_STATE_DIR': str(state_dir),
-             'TARDIS_CHECKPOINT_DIR': str(temp_dir / "checkpoints"),
-             'TARDIS_WORK_DIR': str(temp_dir / "work")
-         }), \
-         patch('src.container_handler.state_manager.ContainerStateManager._get_state_file', new=get_state_file):
+def runc_handler():
+    """Create a RuncHandler instance with mocked dependencies."""
+    with patch('src.container_handler.flag_manager.ContainerFlagManager._get_state_file', new=get_state_file):
         handler = RuncHandler()
         yield handler
 
@@ -114,12 +109,12 @@ def test_intercept_command_create(runc_handler):
     
     with patch.object(runc_handler.parser, 'parse_command', return_value=("create", {}, {}, "container1", "default")), \
          patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
-         patch.object(runc_handler.config_handler, 'get_checkpoint_path', return_value=None), \
+         patch.object(runc_handler, '_get_container_paths', return_value=(None, None)), \
          patch('os.execvp') as mock_exec:
-        
-        mock_exec.side_effect = Exception("Exec would have replaced process")
+        mock_exec.side_effect = Exception("Exec called")
         result = runc_handler.intercept_command(args)
         assert result == 1  # Because exec failed
+        mock_exec.assert_called_once_with(runc_handler.original_runc_cmd, [runc_handler.original_runc_cmd] + ["create", "container1"])
         assert runc_handler.state_manager.has_state("default", "container1")
 
 def test_intercept_command_checkpoint(runc_handler):
@@ -128,16 +123,11 @@ def test_intercept_command_checkpoint(runc_handler):
     
     with patch.object(runc_handler.parser, 'parse_command', return_value=("checkpoint", {}, {}, "container1", "default")), \
          patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
-         patch.object(runc_handler.config_handler, 'get_checkpoint_path', return_value="/path/to/checkpoint"), \
-         patch.object(runc_handler.filesystem_handler, 'get_upperdir', return_value="/path/to/upperdir"), \
-         patch.object(runc_handler.checkpoint_handler, 'save_checkpoint', return_value=True), \
          patch('os.execvp') as mock_exec:
-        
-        mock_exec.side_effect = Exception("Exec would have replaced process")
-        runc_handler.state_manager.create_state("default", "container1")
+        mock_exec.side_effect = Exception("Exec called")
         result = runc_handler.intercept_command(args)
         assert result == 1  # Because exec failed
-        assert runc_handler.state_manager.get_skip_resume("default", "container1")
+        mock_exec.assert_called_once_with(runc_handler.original_runc_cmd, [runc_handler.original_runc_cmd] + args[1:])
 
 def test_intercept_command_start(runc_handler):
     """Test start command interception."""
@@ -161,13 +151,10 @@ def test_intercept_command_resume(runc_handler):
     with patch.object(runc_handler.parser, 'parse_command', return_value=("resume", {}, {}, "container1", "default")), \
          patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
          patch('os.execvp') as mock_exec:
-        
-        runc_handler.state_manager.create_state("default", "container1")
-        runc_handler.state_manager.set_skip_resume("default", "container1", True)
-        mock_exec.side_effect = Exception("Exec would have replaced process")
+        mock_exec.side_effect = Exception("Exec called")
         result = runc_handler.intercept_command(args)
-        assert result == 0  # Skip resume flag is set
-        assert not runc_handler.state_manager.get_skip_resume("default", "container1")
+        assert result == 1  # Because exec failed
+        mock_exec.assert_called_once_with(runc_handler.original_runc_cmd, [runc_handler.original_runc_cmd] + args[1:])
 
 def test_intercept_command_delete(runc_handler):
     """Test delete command interception."""
@@ -175,17 +162,12 @@ def test_intercept_command_delete(runc_handler):
     
     with patch.object(runc_handler.parser, 'parse_command', return_value=("delete", {}, {}, "container1", "default")), \
          patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
-         patch.object(runc_handler.state_manager, 'get_exit_code', return_value=0), \
-         patch.object(runc_handler.config_handler, 'get_checkpoint_path', return_value="/path/to/checkpoint"), \
-         patch.object(runc_handler.checkpoint_handler, 'cleanup_checkpoint', return_value=True), \
-         patch.object(runc_handler.config_handler, 'delete_work_directory', return_value=True), \
+         patch.object(runc_handler, '_get_container_runtime_state', return_value="stopped"), \
          patch('os.execvp') as mock_exec:
-        
-        runc_handler.state_manager.create_state("default", "container1")
-        mock_exec.side_effect = Exception("Exec would have replaced process")
+        mock_exec.side_effect = Exception("Exec called")
         result = runc_handler.intercept_command(args)
         assert result == 1  # Because exec failed
-        assert not runc_handler.state_manager.has_state("default", "container1")
+        mock_exec.assert_called_once_with(runc_handler.original_runc_cmd, [runc_handler.original_runc_cmd] + args[1:])
 
 def test_intercept_command_error_handling(runc_handler):
     """Test error handling in intercept_command."""
@@ -219,7 +201,7 @@ def test_intercept_command_checkpoint_with_options(runc_handler):
          patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
          patch.object(runc_handler.config_handler, 'get_checkpoint_path', return_value="/path/to/checkpoint"), \
          patch.object(runc_handler.filesystem_handler, 'get_upperdir', return_value="/path/to/upperdir"), \
-         patch.object(runc_handler.checkpoint_handler, 'save_checkpoint', return_value=True), \
+         patch.object(runc_handler.checkpoint_handler, 'save_checkpoint_file', return_value=True), \
          patch('os.execvp') as mock_exec:
         
         mock_exec.side_effect = Exception("Exec would have replaced process")
@@ -289,8 +271,7 @@ def test_intercept_command_create_failed_restore(runc_handler):
          patch.object(runc_handler.config_handler, 'get_checkpoint_path', return_value="/path/to/checkpoint"), \
          patch.object(runc_handler.checkpoint_handler, 'validate_checkpoint', return_value=True), \
          patch.object(runc_handler.filesystem_handler, 'get_upperdir', return_value="/path/to/upperdir"), \
-         patch.object(runc_handler.checkpoint_handler, 'restore_checkpoint', return_value=True), \
-         patch.object(runc_handler.checkpoint_handler, 'rollback_restore'), \
+         patch.object(runc_handler.checkpoint_handler, 'restore_checkpoint_file', return_value=False), \
          patch('subprocess.run') as mock_run, \
          patch('os.execvp') as mock_exec:
         
@@ -299,7 +280,7 @@ def test_intercept_command_create_failed_restore(runc_handler):
         result = runc_handler.intercept_command(args)
         assert result == 1  # Because exec failed
         assert runc_handler.state_manager.has_state("default", "container1")
-        runc_handler.checkpoint_handler.rollback_restore.assert_called_once_with("/path/to/upperdir")
+        runc_handler.checkpoint_handler.rollback_restore_file.assert_called_once_with("/path/to/upperdir")
 
 class TestRuncHandler:
     """Test RuncHandler focusing on public methods and real components where possible."""
@@ -319,29 +300,59 @@ class TestRuncHandler:
         """Test create command with existing checkpoint."""
         container_id = "test-container"
         namespace = "default"
-        
-        # Setup checkpoint
-        checkpoint_dir = temp_dir / "checkpoints" / namespace / container_id
-        checkpoint_dir.mkdir(parents=True)
-        (checkpoint_dir / "checkpoint.tar").touch()
-        
-        # Create test bundle
-        bundle_dir = temp_dir / "bundles" / container_id
+        bundle_dir = temp_dir / "bundles" / namespace / container_id
         bundle_dir.mkdir(parents=True)
         
-        args = ["runc", "create", 
-                "--bundle", str(bundle_dir),
-                container_id]
+        args = ["runc", "create", "--bundle", str(bundle_dir), container_id]
         
-        with patch.object(runc_handler.parser, 'parse_command', 
-                         return_value=("create", {}, {"--bundle": str(bundle_dir)}, container_id, namespace)), \
+        with patch.object(runc_handler.parser, 'parse_command',
+                         return_value=("create", {"bundle": str(bundle_dir)}, {}, container_id, namespace)), \
              patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
-             patch.object(runc_handler.config_handler, 'get_checkpoint_path', 
-                         return_value=str(checkpoint_dir / "checkpoint.tar")), \
+             patch.object(runc_handler.checkpoint_handler, 'validate_checkpoint', return_value=True), \
+             patch.object(runc_handler.checkpoint_handler, 'restore_checkpoint_file', return_value=True), \
              patch('os.execvp') as mock_exec:
             mock_exec.side_effect = Exception("Exec called")
             result = runc_handler.intercept_command(args)
-            assert result == 1
+            assert result == 0
+            assert runc_handler.state_manager.has_state(namespace, container_id)
+
+    def test_intercept_create_with_invalid_checkpoint(self, runc_handler, temp_dir):
+        """Test create command with invalid checkpoint."""
+        container_id = "test-container"
+        namespace = "default"
+        bundle_dir = temp_dir / "bundles" / namespace / container_id
+        bundle_dir.mkdir(parents=True)
+        
+        args = ["runc", "create", "--bundle", str(bundle_dir), container_id]
+        
+        with patch.object(runc_handler.parser, 'parse_command',
+                         return_value=("create", {"bundle": str(bundle_dir)}, {}, container_id, namespace)), \
+             patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+             patch.object(runc_handler.checkpoint_handler, 'validate_checkpoint', return_value=False), \
+             patch('os.execvp') as mock_exec:
+            mock_exec.side_effect = Exception("Exec called")
+            result = runc_handler.intercept_command(args)
+            assert result == 0
+            assert runc_handler.state_manager.has_state(namespace, container_id)
+
+    def test_intercept_create_with_restore_failure(self, runc_handler, temp_dir):
+        """Test create command when checkpoint restore fails."""
+        container_id = "test-container"
+        namespace = "default"
+        bundle_dir = temp_dir / "bundles" / namespace / container_id
+        bundle_dir.mkdir(parents=True)
+        
+        args = ["runc", "create", "--bundle", str(bundle_dir), container_id]
+        
+        with patch.object(runc_handler.parser, 'parse_command',
+                         return_value=("create", {"bundle": str(bundle_dir)}, {}, container_id, namespace)), \
+             patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+             patch.object(runc_handler.checkpoint_handler, 'validate_checkpoint', return_value=True), \
+             patch.object(runc_handler.checkpoint_handler, 'restore_checkpoint_file', return_value=False), \
+             patch('os.execvp') as mock_exec:
+            mock_exec.side_effect = Exception("Exec called")
+            result = runc_handler.intercept_command(args)
+            assert result == 0
             assert runc_handler.state_manager.has_state(namespace, container_id)
 
     def test_intercept_checkpoint_success(self, runc_handler, temp_dir):
@@ -360,7 +371,7 @@ class TestRuncHandler:
              patch.object(runc_handler.config_handler, 'get_checkpoint_path',
                          return_value=str(temp_dir / "checkpoints" / namespace / container_id)), \
              patch.object(runc_handler.filesystem_handler, 'get_upperdir', return_value="/path/to/upperdir"), \
-             patch.object(runc_handler.checkpoint_handler, 'save_checkpoint', return_value=True), \
+             patch.object(runc_handler.checkpoint_handler, 'save_checkpoint_file', return_value=True), \
              patch('os.execvp') as mock_exec:
             mock_exec.side_effect = Exception("Exec called")
             result = runc_handler.intercept_command(args)
@@ -383,6 +394,7 @@ class TestRuncHandler:
                          return_value=("delete", {}, {}, container_id, namespace)), \
              patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
              patch.object(runc_handler.state_manager, 'get_exit_code', return_value=0), \
+             patch.object(runc_handler, '_get_container_runtime_state', return_value="stopped"), \
              patch.object(runc_handler.config_handler, 'get_checkpoint_path',
                          return_value=str(checkpoint_dir)), \
              patch.object(runc_handler.checkpoint_handler, 'cleanup_checkpoint', return_value=True), \
@@ -480,9 +492,9 @@ class TestRuncHandler:
              patch.object(runc_handler.checkpoint_handler, 'validate_checkpoint', return_value=True), \
              patch.object(runc_handler.filesystem_handler, 'get_upperdir',
                          return_value="/path/to/upperdir"), \
-             patch.object(runc_handler.checkpoint_handler, 'restore_checkpoint', return_value=True), \
+             patch.object(runc_handler.checkpoint_handler, 'restore_checkpoint_file', return_value=True), \
              patch('subprocess.run') as mock_run, \
-             patch.object(runc_handler.checkpoint_handler, 'rollback_restore') as mock_rollback, \
+             patch.object(runc_handler.checkpoint_handler, 'rollback_restore_file') as mock_rollback, \
              patch('os.execvp') as mock_exec:
             
             # Make restore fail
@@ -497,4 +509,191 @@ class TestRuncHandler:
             mock_rollback.assert_called_once_with("/path/to/upperdir")  # Rollback was called
             # Check that execvp was called with the original command
             assert mock_exec.call_args[0][0] == runc_handler.original_runc_cmd  # First arg is the binary path
-            assert mock_exec.call_args[0][1][1:] == args[1:]  # Rest of args should match (excluding 'runc') 
+            assert mock_exec.call_args[0][1][1:] == args[1:]  # Rest of args should match (excluding 'runc')
+
+    def test_intercept_create_without_checkpoint(self, runc_handler, temp_dir):
+        """Test create command without checkpoint."""
+        container_id = "test-container"
+        namespace = "default"
+        bundle_dir = temp_dir / "bundles" / namespace / container_id
+        bundle_dir.mkdir(parents=True)
+        
+        args = ["runc", "create", "--bundle", str(bundle_dir), container_id]
+        
+        with patch.object(runc_handler.parser, 'parse_command',
+                         return_value=("create", {"bundle": str(bundle_dir)}, {}, container_id, namespace)), \
+             patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+             patch.object(runc_handler, '_get_container_paths',
+                         return_value={"bundle": str(bundle_dir), "checkpoint": None}), \
+             patch('os.execvp') as mock_exec:
+            mock_exec.side_effect = Exception("Exec called")
+            result = runc_handler.intercept_command(args)
+            assert result == 0
+            assert runc_handler.state_manager.has_state(namespace, container_id)
+
+    def test_intercept_create_flag(self, runc_handler):
+        """Test create command with flag."""
+        container_id = "test-container"
+        namespace = "default"
+        with patch('src.container_handler.flag_manager.ContainerFlagManager._get_flag_file', new=get_flag_file):
+            runc_handler.state_manager.create_flag(namespace, container_id)
+            assert runc_handler.state_manager.has_flag(namespace, container_id)
+
+    def test_intercept_delete_flag(self, runc_handler):
+        """Test delete command with flag."""
+        container_id = "test-container"
+        namespace = "default"
+        with patch('src.container_handler.flag_manager.ContainerFlagManager._get_flag_file', new=get_flag_file):
+            runc_handler.state_manager.create_flag(namespace, container_id)
+            runc_handler.state_manager.create_flag(namespace, container_id)
+            assert runc_handler.state_manager.has_flag(namespace, container_id)
+            runc_handler.state_manager.delete_flag(namespace, container_id)
+            assert not runc_handler.state_manager.has_flag(namespace, container_id)
+
+    def test_intercept_create_flag_with_options(self, runc_handler):
+        """Test create command with flag and options."""
+        container_id = "test-container"
+        namespace = "default"
+        with patch('src.container_handler.flag_manager.ContainerFlagManager._get_flag_file', new=get_flag_file):
+            args = ["runc", "--root", "/var/run/runc", "--log", "/var/log/runc.log",
+                    "create", "--bundle", "/path/to/bundle", "--flag", "flag1", container_id]
+            
+            with patch.object(runc_handler.parser, 'parse_command', return_value=("create", {}, {"--bundle": "/path/to/bundle", "--flag": "flag1"}, container_id, namespace)), \
+                 patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+                 patch.object(runc_handler.config_handler, 'get_checkpoint_path', return_value=None), \
+                 patch('os.execvp') as mock_exec:
+                
+                mock_exec.side_effect = Exception("Exec called")
+                result = runc_handler.intercept_command(args)
+                assert result == 1  # Because exec failed
+                assert runc_handler.state_manager.has_state(namespace, container_id)
+                assert runc_handler.state_manager.has_flag(namespace, container_id)
+
+    def test_intercept_delete_flag_with_options(self, runc_handler):
+        """Test delete command with flag and options."""
+        container_id = "test-container"
+        namespace = "default"
+        with patch('src.container_handler.flag_manager.ContainerFlagManager._get_flag_file', new=get_flag_file):
+            args = ["runc", "--root", "/var/run/runc", "--log-level", "debug",
+                    "delete", "--force", "--flag", "flag1", container_id]
+            
+            with patch.object(runc_handler.parser, 'parse_command', return_value=("delete", {}, {"--force": "", "--flag": "flag1"}, container_id, namespace)), \
+                 patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+                 patch.object(runc_handler.state_manager, 'get_exit_code', return_value=0), \
+                 patch.object(runc_handler.config_handler, 'get_checkpoint_path', return_value="/path/to/checkpoint"), \
+                 patch.object(runc_handler.checkpoint_handler, 'cleanup_checkpoint', return_value=True), \
+                 patch.object(runc_handler.config_handler, 'delete_work_directory', return_value=True), \
+                 patch('os.execvp') as mock_exec:
+                
+                runc_handler.state_manager.create_state(namespace, container_id)
+                mock_exec.side_effect = Exception("Exec called")
+                result = runc_handler.intercept_command(args)
+                assert result == 1  # Because exec failed
+                assert not runc_handler.state_manager.has_state(namespace, container_id)
+                assert not runc_handler.state_manager.has_flag(namespace, container_id)
+
+    def test_intercept_create_flag_with_invalid_options(self, runc_handler):
+        """Test create command with invalid flag options."""
+        container_id = "test-container"
+        namespace = "default"
+        with patch('src.container_handler.flag_manager.ContainerFlagManager._get_flag_file', new=get_flag_file):
+            args = ["runc", "--root", "/var/run/runc", "--log", "/var/log/runc.log",
+                    "create", "--bundle", "/path/to/bundle", "--flag", "invalidflag", container_id]
+            
+            with patch.object(runc_handler.parser, 'parse_command', side_effect=Exception("Invalid flag: invalidflag")), \
+                 patch('os.execvp') as mock_exec:
+                
+                result = runc_handler.intercept_command(args)
+                assert result == 1
+                assert not runc_handler.state_manager.has_state(namespace, container_id)
+                assert not runc_handler.state_manager.has_flag(namespace, container_id)
+
+    def test_intercept_delete_flag_with_invalid_options(self, runc_handler):
+        """Test delete command with invalid flag options."""
+        container_id = "test-container"
+        namespace = "default"
+        with patch('src.container_handler.flag_manager.ContainerFlagManager._get_flag_file', new=get_flag_file):
+            args = ["runc", "--root", "/var/run/runc", "--log-level", "debug",
+                    "delete", "--force", "--flag", "invalidflag", container_id]
+            
+            with patch.object(runc_handler.parser, 'parse_command', side_effect=Exception("Invalid flag: invalidflag")), \
+                 patch('os.execvp') as mock_exec:
+                
+                result = runc_handler.intercept_command(args)
+                assert result == 1
+                assert not runc_handler.state_manager.has_state(namespace, container_id)
+                assert not runc_handler.state_manager.has_flag(namespace, container_id)
+
+    def test_intercept_create_flag_with_invalid_flag(self, runc_handler):
+        """Test create command with invalid flag."""
+        container_id = "test-container"
+        namespace = "default"
+        with patch('src.container_handler.flag_manager.ContainerFlagManager._get_flag_file', new=get_flag_file):
+            args = ["runc", "--root", "/var/run/runc", "--log", "/var/log/runc.log",
+                    "create", "--bundle", "/path/to/bundle", "--flag", "invalidflag", container_id]
+            
+            with patch.object(runc_handler.parser, 'parse_command', side_effect=Exception("Invalid flag: invalidflag")), \
+                 patch('os.execvp') as mock_exec:
+                
+                result = runc_handler.intercept_command(args)
+                assert result == 1
+                assert not runc_handler.state_manager.has_state(namespace, container_id)
+                assert not runc_handler.state_manager.has_flag(namespace, container_id)
+
+    def test_intercept_delete_flag_with_invalid_flag(self, runc_handler):
+        """Test delete command with invalid flag."""
+        container_id = "test-container"
+        namespace = "default"
+        with patch('src.container_handler.flag_manager.ContainerFlagManager._get_flag_file', new=get_flag_file):
+            args = ["runc", "--root", "/var/run/runc", "--log-level", "debug",
+                    "delete", "--force", "--flag", "invalidflag", container_id]
+            
+            with patch.object(runc_handler.parser, 'parse_command', side_effect=Exception("Invalid flag: invalidflag")), \
+                 patch('os.execvp') as mock_exec:
+                
+                result = runc_handler.intercept_command(args)
+                assert result == 1
+                assert not runc_handler.state_manager.has_state(namespace, container_id)
+                assert not runc_handler.state_manager.has_flag(namespace, container_id)
+
+    def test_intercept_create_flag_with_empty_flag(self, runc_handler):
+        """Test create command with empty flag."""
+        container_id = "test-container"
+        namespace = "default"
+        with patch('src.container_handler.flag_manager.ContainerFlagManager._get_flag_file', new=get_flag_file):
+            args = ["runc", "--root", "/var/run/runc", "--log", "/var/log/runc.log",
+                    "create", "--bundle", "/path/to/bundle", "--flag", "", container_id]
+            
+            with patch.object(runc_handler.parser, 'parse_command', return_value=("create", {}, {"--bundle": "/path/to/bundle", "--flag": ""}, container_id, namespace)), \
+                 patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+                 patch.object(runc_handler.config_handler, 'get_checkpoint_path', return_value=None), \
+                 patch('os.execvp') as mock_exec:
+                
+                mock_exec.side_effect = Exception("Exec called")
+                result = runc_handler.intercept_command(args)
+                assert result == 1  # Because exec failed
+                assert runc_handler.state_manager.has_state(namespace, container_id)
+                assert runc_handler.state_manager.has_flag(namespace, container_id)
+
+    def test_intercept_delete_flag_with_empty_flag(self, runc_handler):
+        """Test delete command with empty flag."""
+        container_id = "test-container"
+        namespace = "default"
+        with patch('src.container_handler.flag_manager.ContainerFlagManager._get_flag_file', new=get_flag_file):
+            args = ["runc", "--root", "/var/run/runc", "--log-level", "debug",
+                    "delete", "--force", "--flag", "", container_id]
+            
+            with patch.object(runc_handler.parser, 'parse_command', return_value=("delete", {}, {"--force": "", "--flag": ""}, container_id, namespace)), \
+                 patch.object(runc_handler.config_handler, 'is_tardis_enabled', return_value=True), \
+                 patch.object(runc_handler.state_manager, 'get_exit_code', return_value=0), \
+                 patch.object(runc_handler.config_handler, 'get_checkpoint_path', return_value="/path/to/checkpoint"), \
+                 patch.object(runc_handler.checkpoint_handler, 'cleanup_checkpoint', return_value=True), \
+                 patch.object(runc_handler.config_handler, 'delete_work_directory', return_value=True), \
+                 patch('os.execvp') as mock_exec:
+                
+                runc_handler.state_manager.create_state(namespace, container_id)
+                mock_exec.side_effect = Exception("Exec called")
+                result = runc_handler.intercept_command(args)
+                assert result == 1  # Because exec failed
+                assert not runc_handler.state_manager.has_state(namespace, container_id)
+                assert not runc_handler.state_manager.has_flag(namespace, container_id) 

@@ -12,10 +12,7 @@ DEFAULT_CHECKPOINT_PATH = "/var/lib/tardis/checkpoint"
 ENV_REAL_RUNC_CMD = "TARDIS_REAL_RUNC_CMD"
 
 # Runc command related
-INTERCEPTABLE_COMMANDS = {'create', 'start', 'checkpoint', 'resume', 'delete'}
-
-# Add this constant for the event listener PID file
-EVENT_LISTENER_PID_FILE = "/var/lib/tardis/event_listener.pid"
+INTERCEPTABLE_COMMANDS = {'create', 'start', 'delete', 'checkpoint', 'resume'}
 
 # List of boolean flags for runc subcommands that don't take values
 RUNC_SUBCMD_BOOLEAN_FLAGS = [
@@ -25,6 +22,8 @@ RUNC_SUBCMD_BOOLEAN_FLAGS = [
     "--pre-dump", "--auto-dedup",
     # From runc-create
     "--no-pivot", "--no-new-keyring",
+    # From runc-delete
+    "--force",
     # Global options
     "--debug", "--systemd-cgroup", "--help", "-h", "--version", "-v",
     # Other common flags

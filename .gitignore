@@ -31,8 +31,9 @@ ENV/
 *.swp
 *.swo
 
-# Logs
+# Logs and 
 *.log
+*.tar
 
 # Local development
 .env

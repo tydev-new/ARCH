@@ -42,9 +42,9 @@ def test_validate_checkpoint_invalid_content(checkpoint_handler, temp_checkpoint
     dump_log.write_text("Some log\nFailed to dump")
     assert checkpoint_handler.validate_checkpoint(str(temp_checkpoint_dir)) is False
 
-def test_save_checkpoint_success(checkpoint_handler, temp_upperdir, temp_checkpoint_dir):
+def test_save_checkpoint_file_success(checkpoint_handler, temp_upperdir, temp_checkpoint_dir):
     """Test successful checkpoint save operation."""
-    assert checkpoint_handler.save_checkpoint(str(temp_upperdir), str(temp_checkpoint_dir)) is True
+    assert checkpoint_handler.save_checkpoint_file(str(temp_upperdir), str(temp_checkpoint_dir)) is True
     tar_path = temp_checkpoint_dir / "container_files.tar"
     assert tar_path.exists()
     
@@ -54,32 +54,32 @@ def test_save_checkpoint_success(checkpoint_handler, temp_upperdir, temp_checkpo
         assert len(members) > 0
         assert any(m.name.endswith("test.txt") for m in members)
 
-def test_save_checkpoint_no_upperdir(checkpoint_handler, temp_checkpoint_dir):
+def test_save_checkpoint_file_no_upperdir(checkpoint_handler, temp_checkpoint_dir):
     """Test checkpoint save when upperdir doesn't exist."""
-    assert checkpoint_handler.save_checkpoint("/nonexistent/path", str(temp_checkpoint_dir)) is False
+    assert checkpoint_handler.save_checkpoint_file("/nonexistent/path", str(temp_checkpoint_dir)) is False
 
-def test_restore_checkpoint_success(checkpoint_handler, temp_checkpoint_dir, temp_upperdir):
+def test_restore_checkpoint_file_success(checkpoint_handler, temp_checkpoint_dir, temp_upperdir):
     """Test successful checkpoint restore operation."""
     # First save a checkpoint
-    assert checkpoint_handler.save_checkpoint(str(temp_upperdir), str(temp_checkpoint_dir)) is True
+    assert checkpoint_handler.save_checkpoint_file(str(temp_upperdir), str(temp_checkpoint_dir)) is True
     
     # Create new upperdir for restore
     new_upperdir = temp_upperdir.parent / "new_upperdir"
     new_upperdir.mkdir()
     
     # Restore checkpoint
-    assert checkpoint_handler.restore_checkpoint(str(temp_checkpoint_dir), str(new_upperdir)) is True
+    assert checkpoint_handler.restore_checkpoint_file(str(temp_checkpoint_dir), str(new_upperdir)) is True
     assert (new_upperdir / "fs" / "test.txt").exists()
     assert (new_upperdir / "fs" / "test.txt").read_text() == "test content"
 
-def test_restore_checkpoint_no_checkpoint(checkpoint_handler, temp_upperdir):
+def test_restore_checkpoint_file_no_checkpoint(checkpoint_handler, temp_upperdir):
     """Test restore when checkpoint doesn't exist."""
-    assert checkpoint_handler.restore_checkpoint("/nonexistent/checkpoint", str(temp_upperdir)) is False
+    assert checkpoint_handler.restore_checkpoint_file("/nonexistent/checkpoint", str(temp_upperdir)) is False
 
-def test_restore_checkpoint_with_backup(checkpoint_handler, temp_checkpoint_dir, temp_upperdir):
+def test_restore_checkpoint_file_with_backup(checkpoint_handler, temp_checkpoint_dir, temp_upperdir):
     """Test restore with existing fs directory backup."""
     # First save a checkpoint
-    assert checkpoint_handler.save_checkpoint(str(temp_upperdir), str(temp_checkpoint_dir)) is True
+    assert checkpoint_handler.save_checkpoint_file(str(temp_upperdir), str(temp_checkpoint_dir)) is True
     
     # Create backup directory
     backup_dir = temp_upperdir / "fs.bak"
@@ -87,13 +87,13 @@ def test_restore_checkpoint_with_backup(checkpoint_handler, temp_checkpoint_dir,
     (backup_dir / "backup.txt").write_text("backup content")
     
     # Restore checkpoint
-    assert checkpoint_handler.restore_checkpoint(str(temp_checkpoint_dir), str(temp_upperdir)) is True
+    assert checkpoint_handler.restore_checkpoint_file(str(temp_checkpoint_dir), str(temp_upperdir)) is True
     assert not backup_dir.exists()  # Backup should be removed
     assert (temp_upperdir / "fs" / "test.txt").exists()  # Original file should be restored
 
-def test_rollback_restore_success(checkpoint_handler, temp_upperdir):
+def test_rollback_restore_file_success(checkpoint_handler, temp_upperdir):
     """Test successful rollback after failed restore."""
-    checkpoint_handler.rollback_restore(str(temp_upperdir))
+    checkpoint_handler.rollback_restore_file(str(temp_upperdir))
     assert not temp_upperdir.exists()
 
 def test_cleanup_checkpoint_success(checkpoint_handler, temp_checkpoint_dir):

@@ -1,0 +1,10 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+When debugging difficult issues, ie. taking more than 2 attemps, add logs to both code and pytest code to gather more information, or use python debugger.
+
+Keep the debugging artifacts until the issue is resolved.
+
+Clean up all debugging code once fixed

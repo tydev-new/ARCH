@@ -1,0 +1,14 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+ Act in a role of senior engineer.
+ 
+ Review test case against engineering requirement and implementation code.
+ 
+ Check the test case to cover enough potential input and other conditions, but not overly broad.
+
+ Check if the test case are implemented in the simplest way.
+
+ Ask for clarification questions when needed.

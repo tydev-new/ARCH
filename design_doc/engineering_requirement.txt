@@ -56,7 +56,7 @@ See existing runc_handler_parser and update to the requirement.
 
 1.2 Verify container config
 
-Tardis checks whether the containers is Tardis enabled by looking into the container’s config json and see if env variable TARDIS ENABLE is there. See section 2.1.  
+Tardis checks whether the containers is Tardis enabled by looking into the container's config json and see if env variable TARDIS ENABLE is there. See section 2.1.  
 
 If not enabled, Tardis calls real Runc with the unmodified args.
 
@@ -118,7 +118,7 @@ Expand the existing Containerd and Runc behavior to checkpoint container process
 
 Do the following:
 
-Retrieve checkpoint image path from container’s config.json
+Retrieve checkpoint image path from container's config.json
 
 Retrieve container upperdir path
 
@@ -186,8 +186,6 @@ First uniquely identify the container using namespace and container_id.
 
 Use the following to find the config.json file location.
 
-
-
     possible_paths = [
         "/run/containerd/io.containerd.runtime.v2.task/<namespace>/<container_id>/config.json",
         "/run/containerd/runc/<namespace>/<container_id>/config.json",
@@ -218,6 +216,8 @@ By default:
 Reading TARDIS_ENABLE and TARDIS_ENABLE_MANAGED_EBS returns 0 if the variable is missing, or does not have a value.
 
 XYX_PATH variables by default returns None.
+
+Note: If config.json has no 'process' key, it is considered a valid case and the container is not Tardis-enabled.
 
 2.2 Modify settings
 
@@ -300,7 +300,7 @@ else image path = $BASE_CHECKPOINT_PATH/namespace/container_id
 
 Need to validate the checkpoint image, based on image path as input. 
 
-Find dump.log in the image path, and verify its last line includes “Dumping finished successfully"
+Find dump.log in the image path, and verify its last line includes "Dumping finished successfully"
 
 If both condition passes, return true. If either fails, return false.
 
@@ -312,9 +312,9 @@ Since Tardis is called by multiple processes, each state read & write operation 
 
 The tracked states includes:
 
-skip_start flag - During Containerd’s call to Runc create, if the container is actually restored from checkpoint, Tardis need to skip the next Containerd call to Runc start, as the restored container start automatically.
+skip_start flag - During Containerd's call to Runc create, if the container is actually restored from checkpoint, Tardis need to skip the next Containerd call to Runc start, as the restored container start automatically.
 
-skip_resume flag - Similar reason for Containerd’s call to Runc Checkpoint, we need to skip the next Runc resume call, as Tardis kills to the container process after checkpoint to maintain consistent states.
+skip_resume flag - Similar reason for Containerd's call to Runc Checkpoint, we need to skip the next Runc resume call, as Tardis kills to the container process after checkpoint to maintain consistent states.
 
 Container process exit code
 
@@ -344,7 +344,7 @@ Note there are:
 
 Events other than /tasks/exit, which are dropped
 
-Exit code (“exit_status”) may not be present, which is taken as exit code 0
+Exit code ("exit_status") may not be present, which is taken as exit code 0
 
 Tardis need to set a flag for exit code for the enabled containers after parsing a matching exit event, based on namespace and container_id.
 

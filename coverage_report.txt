@@ -1,0 +1,29 @@
+============================= test session starts ==============================
+platform linux -- Python 3.9.20, pytest-8.3.5, pluggy-1.5.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/ec2-user/new-tardis
+plugins: cov-6.1.1
+collecting ... collected 26 items
+
+tests/unit/test_runc_handler.py::test_init_with_env_var PASSED           [  3%]
+tests/unit/test_runc_handler.py::test_init_with_config_file PASSED       [  7%]
+tests/unit/test_runc_handler.py::test_init_no_runc_found PASSED          [ 11%]
+tests/unit/test_runc_handler.py::test_intercept_command_non_interceptable PASSED [ 15%]
+tests/unit/test_runc_handler.py::test_intercept_command_not_tardis_enabled PASSED [ 19%]
+tests/unit/test_runc_handler.py::test_intercept_command_create PASSED    [ 23%]
+tests/unit/test_runc_handler.py::test_intercept_command_checkpoint PASSED [ 26%]
+tests/unit/test_runc_handler.py::test_intercept_command_start PASSED     [ 30%]
+tests/unit/test_runc_handler.py::test_intercept_command_resume PASSED    [ 34%]
+tests/unit/test_runc_handler.py::test_intercept_command_delete PASSED    [ 38%]
+tests/unit/test_runc_handler.py::test_intercept_command_error_handling PASSED [ 42%]
+tests/unit/test_runc_handler.py::test_intercept_command_create_with_options PASSED [ 46%]
+tests/unit/test_runc_handler.py::test_intercept_command_checkpoint_with_options PASSED [ 50%]
+tests/unit/test_runc_handler.py::test_intercept_command_start_with_options PASSED [ 53%]
+tests/unit/test_runc_handler.py::test_intercept_command_resume_with_options PASSED [ 57%]
+tests/unit/test_runc_handler.py::test_intercept_command_delete_with_options PASSED [ 61%]
+tests/unit/test_runc_handler.py::test_intercept_command_create_failed_restore PASSED [ 65%]
+tests/unit/test_runc_handler.py::TestRuncHandler::test_intercept_non_tardis_command PASSED [ 69%]
+tests/unit/test_runc_handler.py::TestRuncHandler::test_intercept_create_with_checkpoint PASSED [ 73%]
+tests/unit/test_runc_handler.py::TestRuncHandler::test_intercept_checkpoint_success PASSED [ 76%]
+tests/unit/test_runc_handler.py::TestRuncHandler::test_intercept_delete_with_cleanup PASSED [ 80%]
+tests/unit/test_runc_handler.py::TestRuncHandler::test_intercept_start_skip_flag 

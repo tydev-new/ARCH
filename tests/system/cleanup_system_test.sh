@@ -15,11 +15,11 @@ container_info=$(sudo ctr t ls | grep $CONTAINER_ID)
 if [[ ! -z "$container_info" ]]; then
   echo "'tc' task found. Killing process and removing task..."
   # Extract the PID
-  pid=$(echo "$container_info" | awk '{print $2}')
+  #pid=$(echo "$container_info" | awk '{print $2}')
 
   # Kill the process
-  sudo kill -9 "$pid"
-  echo "Process killed."
+  #sudo kill -9 "$pid"
+  #echo "Process killed."
 
   # Remove the task
   sudo ctr t rm tc

@@ -1,7 +1,7 @@
 import os
+import sys
 import shutil
 import tarfile
-import subprocess
 from typing import Tuple
 from src.utils.logging import logger
 
@@ -32,14 +32,14 @@ class CheckpointHandler:
             logger.error(f"Error validating checkpoint: {e}")
             return False
 
-    def save_checkpoint(self, upperdir: str, checkpoint_path: str) -> bool:
+    def save_checkpoint_file(self, upperdir: str, checkpoint_path: str) -> bool:
         """Save container files to checkpoint using tar compression."""
         try:
             logger.info(f"Starting checkpoint save from {upperdir} to {checkpoint_path}")
             if not os.path.exists(upperdir):
                 logger.error(f"Upperdir does not exist: {upperdir}")
                 return False
-            
+                
             # Create checkpoint directory
             logger.info(f"Creating checkpoint directory at {checkpoint_path}")
             os.makedirs(checkpoint_path, exist_ok=True)
@@ -52,11 +52,12 @@ class CheckpointHandler:
             
             logger.info(f"Successfully saved checkpoint to {tar_path}")
             return True
+                
         except Exception as e:
             logger.error(f"Failed to save checkpoint: {e}")
             return False
 
-    def restore_checkpoint(self, checkpoint_path: str, upperdir: str) -> bool:
+    def restore_checkpoint_file(self, checkpoint_path: str, upperdir: str) -> bool:
         """Restore container files from checkpoint."""
         try:
             logger.info(f"Starting checkpoint restore from {checkpoint_path} to {upperdir}")
@@ -93,13 +94,18 @@ class CheckpointHandler:
                     member.name = member.name[len(root_dir)+1:]
                     tar.extract(member, path=upperdir)
             
+            # Clean up backup after successful restore
+            if backup_path and os.path.exists(backup_path):
+                logger.info(f"Cleaning up backup at {backup_path}")
+                shutil.rmtree(backup_path)
+            
             logger.info(f"Successfully restored checkpoint to {upperdir}")
             return True
         except Exception as e:
             logger.error(f"Failed to restore checkpoint: {e}")
             return False
 
-    def rollback_restore(self, upperdir: str) -> None:
+    def rollback_restore_file(self, upperdir: str) -> None:
         """Clean up upperdir after failed restore."""
         logger.info(f"Starting rollback for upperdir {upperdir}")
         if os.path.exists(upperdir):

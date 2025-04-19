@@ -1,16 +1,20 @@
 import os
 import json
 import pytest
-import tempfile
-from datetime import datetime
-from src.container_handler.state_manager import ContainerStateManager
+from unittest.mock import patch, Mock
+from src.container_handler.flag_manager import ContainerFlagManager
 
 @pytest.fixture
 def state_manager():
-    """Create a state manager with a temporary directory."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        manager = ContainerStateManager(state_dir=temp_dir)
+    """Create a ContainerFlagManager instance with a temporary directory."""
+    with patch('src.container_handler.flag_manager.STATE_DIR', '/tmp/tardis/state'):
+        manager = ContainerFlagManager(state_dir='/tmp/tardis/state')
         yield manager
+        # Cleanup
+        if os.path.exists('/tmp/tardis/state'):
+            for file in os.listdir('/tmp/tardis/state'):
+                os.remove(os.path.join('/tmp/tardis/state', file))
+            os.rmdir('/tmp/tardis/state')
 
 def test_create_state(state_manager):
     """Test creating state for a container."""
@@ -237,4 +241,126 @@ def test_write_state_io_error(state_manager, monkeypatch):
     # Get operations should return default values
     assert state_manager.get_skip_start(namespace, container_id) is False
     assert state_manager.get_skip_resume(namespace, container_id) is False
-    assert state_manager.get_exit_code(namespace, container_id) is None 
+    assert state_manager.get_exit_code(namespace, container_id) is None
+
+def test_keep_resources(state_manager):
+    """Test keep_resources flag operations."""
+    namespace = "test"
+    container_id = "container1"
+    
+    # Create state first
+    state_manager.create_state(namespace, container_id)
+    
+    # Set and get keep_resources
+    state_manager.set_keep_resources(namespace, container_id, True)
+    assert state_manager.get_keep_resources(namespace, container_id) is True
+    
+    state_manager.set_keep_resources(namespace, container_id, False)
+    assert state_manager.get_keep_resources(namespace, container_id) is False
+
+def test_create_flag(state_manager):
+    """Test creating flag file."""
+    namespace = "test"
+    container_id = "container1"
+    
+    state_manager.create_flag(namespace, container_id)
+    assert state_manager.has_flag(namespace, container_id)
+    
+    flag_file = state_manager._get_flag_file(namespace, container_id)
+    assert os.path.exists(flag_file)
+    
+    with open(flag_file, 'r') as f:
+        flag_data = json.load(f)
+        assert flag_data['version'] == state_manager.STATE_VERSION
+        assert not flag_data['skip_start']
+        assert not flag_data['skip_resume']
+        assert not flag_data['keep_resources']
+        assert flag_data['exit_code'] is None
+        assert 'last_updated' in flag_data
+
+def test_create_flag_duplicate(state_manager):
+    """Test creating flag file when it already exists."""
+    namespace = "test"
+    container_id = "container1"
+    
+    # Create initial flag
+    state_manager.create_flag(namespace, container_id)
+    first_flag_file = state_manager._get_flag_file(namespace, container_id)
+    
+    # Read first flag data
+    with open(first_flag_file, 'r') as f:
+        first_flag = json.load(f)
+    
+    # Create duplicate flag
+    state_manager.create_flag(namespace, container_id)
+    second_flag_file = state_manager._get_flag_file(namespace, container_id)
+    
+    # Read second flag data
+    with open(second_flag_file, 'r') as f:
+        second_flag = json.load(f)
+    
+    # Verify both flags are valid
+    assert state_manager._validate_flag(first_flag)
+    assert state_manager._validate_flag(second_flag)
+    
+    # Verify flags are identical
+    assert first_flag == second_flag
+
+def test_clear_flag(state_manager):
+    """Test clearing flag file."""
+    namespace = "test"
+    container_id = "container1"
+    
+    # Create flag
+    state_manager.create_flag(namespace, container_id)
+    assert state_manager.has_flag(namespace, container_id)
+    
+    # Clear flag
+    state_manager.clear_flag(namespace, container_id)
+    assert not state_manager.has_flag(namespace, container_id)
+    
+    # Verify file is deleted
+    flag_file = state_manager._get_flag_file(namespace, container_id)
+    assert not os.path.exists(flag_file)
+
+def test_write_flag_validation(state_manager):
+    """Test flag validation during write."""
+    namespace = "test"
+    container_id = "container1"
+    
+    # Create invalid flag data
+    invalid_flag = {
+        'version': state_manager.STATE_VERSION,
+        'skip_start': False,
+        'skip_resume': False,
+        'keep_resources': False,
+        # Missing exit_code and last_updated
+    }
+    
+    # Attempt to write invalid flag
+    with pytest.raises(ValueError):
+        state_manager._write_flag(
+            state_manager._get_flag_file(namespace, container_id),
+            invalid_flag
+        )
+
+def test_write_flag_io_error(state_manager, monkeypatch):
+    """Test IO error handling during flag write."""
+    namespace = "test"
+    container_id = "container1"
+    
+    # Create flag
+    state_manager.create_flag(namespace, container_id)
+    
+    # Mock open to raise IOError
+    def mock_open(*args, **kwargs):
+        raise IOError("Mock IO error")
+    
+    monkeypatch.setattr("builtins.open", mock_open)
+    
+    # Attempt to write flag
+    with pytest.raises(IOError):
+        state_manager._write_flag(
+            state_manager._get_flag_file(namespace, container_id),
+            state_manager._create_initial_flag()
+        ) 

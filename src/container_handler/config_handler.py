@@ -27,6 +27,7 @@ class ContainerConfigHandler:
                 namespace=namespace,
                 container_id=container_id
             )
+            logger.debug(f"Checking path: {path}")
             if os.path.exists(path):
                 logger.debug(f"Found config.json at: {path}")
                 return path
@@ -248,7 +249,7 @@ class ContainerConfigHandler:
 
     def delete_work_directory(self, container_id: str, namespace: str) -> bool:
         """
-        Delete work directory for a container.
+        Delete the work directory for a container if it exists.
         
         Args:
             container_id: Container ID
@@ -257,19 +258,35 @@ class ContainerConfigHandler:
         Returns:
             bool: True if directory deleted or doesn't exist, False on error
         """
+        # Get networkfs path
+        networkfs_path = self._get_env_var_value(container_id, namespace, "TARDIS_NETWORKFS_HOST_PATH", default=None)
+        if not networkfs_path:
+            return True  # No networkfs path, nothing to do
+            
+        # Build work directory path
+        work_dir = os.path.join(networkfs_path, "work", namespace, container_id)
+        
+        # Delete work directory if it exists
         try:
-            networkfs_path = self._get_env_var_value(container_id, namespace, "TARDIS_NETWORKFS_HOST_PATH", default=None)
-            if not networkfs_path:
-                return True
-                
-            # Only delete work directory
-            work_path = os.path.join(networkfs_path, "work", namespace, container_id)
-            if os.path.exists(work_path):
-                shutil.rmtree(work_path)
-                logger.info(f"Deleted work directory {work_path}")
-                
+            if os.path.exists(work_dir):
+                shutil.rmtree(work_dir)
+                logger.info(f"Deleted work directory {work_dir}")
             return True
         except Exception as e:
-            logger.error(f"Failed to delete work directory for container {container_id}: {e}")
+            logger.error(f"Failed to delete work directory {work_dir}: {e}")
             return False
+
+    def has_bind_mount(self, container_id: str, namespace: str) -> bool:
+        """
+        Check if a container has a bind mount by checking if TARDIS_NETWORKFS_HOST_PATH is set.
+        
+        Args:
+            container_id: Container ID
+            namespace: Container namespace
+            
+        Returns:
+            bool: True if container has bind mount, False otherwise
+        """
+        networkfs_path = self._get_env_var_value(container_id, namespace, "TARDIS_NETWORKFS_HOST_PATH", default=None)
+        return networkfs_path is not None
 

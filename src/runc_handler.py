@@ -8,20 +8,20 @@ from src.utils.logging import logger
 from src.runc_command_parser import RuncCommandParser
 from src.utils.constants import CONFIG_PATH, ENV_REAL_RUNC_CMD, INTERCEPTABLE_COMMANDS
 from src.container_handler.config_handler import ContainerConfigHandler
-from src.container_handler.state_manager import ContainerStateManager
 from src.container_handler.filesystem_handler import ContainerFilesystemHandler
+from src.container_handler.runtime_state import ContainerRuntimeState
 from src.checkpoint_handler import CheckpointHandler
-from src.container_handler.event_listener import ContainerEventListener
+from src.container_handler.flag_manager import ContainerFlagManager
 
 class RuncHandler:
     def __init__(self):
         self.parser = RuncCommandParser()
         self.original_runc_cmd = self._get_real_runc_cmd()
         self.config_handler = ContainerConfigHandler()
-        self.state_manager = ContainerStateManager()
         self.filesystem_handler = ContainerFilesystemHandler()
         self.checkpoint_handler = CheckpointHandler()
-        self.event_listener = None
+        self.runtime_state = ContainerRuntimeState(self.original_runc_cmd)
+        self.flag_manager = ContainerFlagManager()
         logger.info("RuncHandler initialized with real runc at: %s", self.original_runc_cmd)
 
     def _get_real_runc_cmd(self) -> str:
@@ -48,143 +48,182 @@ class RuncHandler:
         logger.error("Could not find runc binary")
         sys.exit(1)
 
-    def _handle_error(self, error_msg: str, container_id: str, namespace: str) -> int:
-        """Common error handling for command processing."""
-        logger.error("%s for container %s in namespace %s", error_msg, container_id, namespace)
-        return 1
-
-    def _modify_restore_command(self, container_id: str, namespace: str, global_options: Dict[str, str], subcmd_options: Dict[str, str], checkpoint_path: str) -> List[str]:
-        """Modify the restore command to use our checkpoint path."""
-        # Start with the real runc command
+    def _build_restore_command(self, container_id: str, global_options: Dict[str, str], 
+                             subcmd_options: Dict[str, str], checkpoint_path: str) -> List[str]:
+        """Build restore command with checkpoint path."""
         cmd = [self.original_runc_cmd]
         
         # Add global options
         for opt, value in global_options.items():
             cmd.extend([opt, value])
         
-        # Add subcommand
+        # Add restore command and options
         cmd.append("restore")
-        
-        # Add subcommand options
         for opt, value in subcmd_options.items():
             cmd.extend([opt, value])
-        
-        # Add our checkpoint path
-        cmd.extend(["--image-path", checkpoint_path])
         
         # Ensure --detached option is present
         if "--detach" not in subcmd_options:
             cmd.append("--detach")
         
-        # Add container ID
-        cmd.append(container_id)
+        # Add checkpoint path and container ID
+        cmd.extend(["--image-path", checkpoint_path, container_id])
         
-        logger.info("Modified restore command: %s", " ".join(cmd))
+        logger.info("Built restore command: %s", " ".join(cmd))
         return cmd
 
-    def _handle_create_command(self, container_id: str, namespace: str, global_options: Dict[str, str], subcommand_options: Dict[str, str], arg: List[str]) -> int:
-        """Handle create command processing."""
-        logger.info("Processing create command for container %s in namespace %s", container_id, namespace)
-        logger.info("Original command: %s", arg)
-
-        # Create state file for Tardis-enabled container
-        self.state_manager.create_state(namespace, container_id)
-        logger.info("Created state file for container %s in namespace %s", container_id, namespace)
-
-        # Add bind mount if TARDIS_NETWORKFS_HOST_PATH is set
-        if not self.config_handler.add_bind_mount(container_id, namespace):
-            logger.warning("Failed to add bind mount for container %s", container_id)
-            # Continue with create/restore even if bind mount fails
-
-        # Then check for checkpoint image
-        checkpoint_path = self.config_handler.get_checkpoint_path(container_id, namespace)
-        if not checkpoint_path:
-            logger.info("No checkpoint found for container %s, proceeding with create", container_id)
-            return self._execute_command(arg)
-
-        # Validate checkpoint
-        if not self.checkpoint_handler.validate_checkpoint(checkpoint_path):
-            logger.warning("Invalid checkpoint for container %s", container_id)
-            return self._execute_command(arg)
+    def _perform_restore_process(self, container_id: str, global_options: Dict[str, str], 
+                        subcmd_options: Dict[str, str], checkpoint_path: str) -> bool:
+        """Perform restore operation for container.
         
-        # Get container upperdir
-        upperdir = self.filesystem_handler.get_upperdir(container_id, namespace)
-        if not upperdir:
-            logger.warning("Could not determine container upperdir %s, %s", container_id, namespace)
-            return self._execute_command(arg)
-        
-        # Restore from checkpoint
+        Returns:
+            bool: True if restore was successful, False otherwise
+        """
         try:
-            logger.info("Restoring container %s from checkpoint at %s", container_id, checkpoint_path)
-            # Restore files from checkpoint
-            if not self.checkpoint_handler.restore_checkpoint(checkpoint_path, upperdir):
-                logger.warning("Failed to restore container files %s, %s", container_id, namespace)
-                return self._execute_command(arg)
-            
-            # Build restore command using _modify_restore_command
-            restore_cmd = self._modify_restore_command(
+            # Build and execute restore command
+            restore_cmd = self._build_restore_command(
                 container_id=container_id,
-                namespace=namespace,
                 global_options=global_options,
-                subcmd_options=subcommand_options,
+                subcmd_options=subcmd_options,
                 checkpoint_path=checkpoint_path
             )
             
-            # Execute restore command using subprocess.run
             logger.info("Executing restore command for container %s", container_id)
             result = subprocess.run(restore_cmd, check=False)
             
             if result.returncode == 0:
                 logger.info("Successfully restored container %s", container_id)
-                self.state_manager.set_skip_start(namespace, container_id, True)
+                return True
+                
+            logger.warning("Restore command failed for container %s with code %d", container_id, result.returncode)
+            return False
+                
+        except Exception as e:
+            logger.warning("Error during restore for container %s: %s", container_id, str(e))
+            return False
+
+    def _handle_create_command(self, container_id: str, namespace: str, global_options: Dict[str, str], 
+                             subcommand_options: Dict[str, str], arg: List[str]) -> int:
+        """Handle create command processing."""
+        logger.info("Processing create command for container %s in namespace %s", container_id, namespace)
+        logger.info("Original command: %s", arg)
+
+        # Get checkpoint path and upperdir
+        checkpoint_path, upperdir = self._get_container_paths(container_id, namespace)
+        if not checkpoint_path or not upperdir:
+            logger.info("No checkpoint found for container %s, proceeding with create", container_id)
+            return self._execute_command(arg)
+
+        # Add bind mount if TARDIS_NETWORKFS_HOST_PATH is set
+        if not self.config_handler.add_bind_mount(container_id, namespace):
+            logger.warning("Failed to add bind mount for container %s, falling back to create", container_id)
+            return self._execute_command(arg)
+        
+        # Validate checkpoint
+        if not self.checkpoint_handler.validate_checkpoint(checkpoint_path):
+            logger.warning("Invalid checkpoint for container %s, falling back to create", container_id)
+            return self._execute_command(arg)
+        
+        # Restore from checkpoint
+        try:
+            logger.info("Restoring container %s from checkpoint at %s", container_id, checkpoint_path)
+            
+            # Restore files from checkpoint
+            if not self.checkpoint_handler.restore_checkpoint_file(checkpoint_path, upperdir):
+                logger.warning("Failed to restore container files for %s, falling back to create", container_id)
+                self.checkpoint_handler.rollback_restore_file(upperdir)
+                return self._execute_command(arg)
+            
+            # Perform restore operation
+            if self._perform_restore_process(container_id, global_options, subcommand_options, checkpoint_path):
+                self.flag_manager.set_skip_start(namespace, container_id, True)
                 return 0
                 
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Error during restore for container %s: %s, falling back to create", container_id, str(e))
+            self.checkpoint_handler.rollback_restore_file(upperdir)
             
         # On any failure, cleanup and create
         logger.info("Falling back to create command for container %s", container_id)
-        self.checkpoint_handler.rollback_restore(upperdir)
         return self._execute_command(arg)
 
-    def _handle_checkpoint_command(self, container_id: str, namespace: str, global_options: Dict[str, str], subcommand_options: Dict[str, str]) -> int:
-        """Handle checkpoint command processing."""
-        logger.info("Processing checkpoint command for container %s in namespace %s", container_id, namespace)
+    def _handle_start_command(self, container_id: str, namespace: str, global_options: Dict[str, str], 
+                            subcommand_options: Dict[str, str], args: List[str]) -> int:
+        """Handle start command processing."""
+        logger.info("Processing start command for container %s in namespace %s", container_id, namespace)
         
-        # Get checkpoint path
+        # Check skip_start flag
+        if self.flag_manager.get_skip_start(namespace, container_id):
+            logger.info("Skip start flag set for container %s, resetting flag and exiting", container_id)
+            self.flag_manager.set_skip_start(namespace, container_id, False)
+            return 0
+        
+        # Pass through original command
+        logger.info("No skip start flag for container %s, passing through", container_id)
+        return self._execute_command(args)
+
+    def _handle_resume_command(self, container_id: str, namespace: str, global_options: Dict[str, str], 
+                             subcommand_options: Dict[str, str], args: List[str]) -> int:
+        """Handle resume command processing."""
+        logger.info("Processing resume command for container %s in namespace %s", container_id, namespace)
+        
+        # Check skip_resume flag
+        if self.flag_manager.get_skip_resume(namespace, container_id):
+            logger.info("Skip resume flag set for container %s, resetting flag and exiting", container_id)
+            self.flag_manager.set_skip_resume(namespace, container_id, False)
+            return 0
+        
+        # Pass through original command
+        logger.info("No skip resume flag for container %s, passing through", container_id)
+        return self._execute_command(args)
+
+    def _get_container_paths(self, container_id: str, namespace: str) -> Tuple[Optional[str], Optional[str]]:
+        """Get checkpoint path and upperdir for container."""
         checkpoint_path = self.config_handler.get_checkpoint_path(container_id, namespace)
         if not checkpoint_path:
-            return self._handle_error("Could not determine checkpoint path", container_id, namespace)
-        
-        # Get container upperdir
+            logger.warning("Could not determine checkpoint path for container %s", container_id)
+            return None, None
+            
         upperdir = self.filesystem_handler.get_upperdir(container_id, namespace)
         if not upperdir:
-            return self._handle_error("Could not determine container upperdir", container_id, namespace)
+            logger.warning("Could not determine container upperdir for container %s", container_id)
+            return None, None
+            
+        return checkpoint_path, upperdir
+
+
+    def _cleanup_container_resources(self, container_id: str, namespace: str) -> None:
+        """Clean up checkpoint and work directory for container."""
+        # Get checkpoint path
+        checkpoint_path = self.config_handler.get_checkpoint_path(container_id, namespace)
         
-        try:
-            # Save container files first
-            logger.info("Saving container files to checkpoint at %s", checkpoint_path)
-            if not self.checkpoint_handler.save_checkpoint(upperdir, checkpoint_path):
-                return self._handle_error("Failed to save container files", container_id, namespace)
-            
-            # Set skip_resume flag
-            logger.info("Setting skip_resume flag for container %s", container_id)
-            self.state_manager.set_skip_resume(namespace, container_id, True)
-            
-            logger.info("Before modify command")
-            # Modify and execute command last (since execvp will replace current process)
-            modified_cmd = self._modify_checkpoint_command(
-                container_id=container_id,
-                namespace=namespace,
-                global_options=global_options,
-                subcmd_options=subcommand_options,
-                checkpoint_path=checkpoint_path
-            )
-            logger.info("Modified command: %s", " ".join(modified_cmd))
-            return self._execute_command(modified_cmd)
-            
-        except Exception as e:
-            return self._handle_error(f"Checkpoint failed: {str(e)}", container_id, namespace)
+        # Clean up checkpoint if path exists
+        if checkpoint_path:
+            if not self.checkpoint_handler.cleanup_checkpoint(checkpoint_path):
+                logger.warning("Failed to clean up checkpoint for container %s", container_id)
+        
+        # Clean up work directory
+        if not self.config_handler.delete_work_directory(container_id, namespace):
+            logger.warning("Failed to clean up work directory for container %s", container_id)
+
+    def _handle_delete_command(self, container_id: str, namespace: str, global_options: Dict[str, str], 
+                             subcommand_options: Dict[str, str], args: List[str]) -> int:
+        """Handle delete command processing."""
+        logger.info("Processing delete command for container %s in namespace %s", container_id, namespace)
+        
+        # Check if flag file exists
+        if self.flag_manager.has_flag(namespace, container_id):
+            # Check if keep_resources is false
+            if not self.flag_manager.get_keep_resources(namespace, container_id):
+                logger.info("Keep resources flag is false for container %s, cleaning up resources", container_id)
+                # Clean up resources
+                self._cleanup_container_resources(container_id, namespace)
+                # Clear flag
+                self.flag_manager.clear_flag(namespace, container_id)
+        
+        # Execute the real runc delete command
+        logger.info("Executing delete command for container %s", container_id)
+        return self._execute_command(args)
 
     def _execute_command(self, args: List[str]) -> int:
         """Execute the command with the real Runc binary."""
@@ -198,8 +237,95 @@ class RuncHandler:
             logger.error("Error executing command: %s", str(e))
             return 1
 
-    def _modify_checkpoint_command(self, container_id: str, namespace: str, global_options: Dict[str, str], subcmd_options: Dict[str, str], checkpoint_path: str) -> List[str]:
-        """Modify the checkpoint command to use our checkpoint path."""
+    def intercept_command(self, args: List[str]) -> int:
+        """Intercept and process Runc commands."""
+        try:
+            # Log the raw command for debugging
+            logger.info("Raw command received: %s", " ".join(args))
+            
+            # Parse the command
+            try:
+                subcommand, global_options, subcommand_options, container_id, namespace = self.parser.parse_command(args)
+                logger.info("Intercepted %s command for container %s in namespace %s", subcommand, container_id, namespace)
+            except Exception as e:
+                logger.warning("Failed to parse command: %s, proceeding with original command", str(e))
+                return self._execute_command(args[1:])
+            
+            # Check if command should be intercepted
+            if subcommand not in INTERCEPTABLE_COMMANDS:
+                logger.info("Command %s not intercepted, passing through", subcommand)
+                return self._execute_command(args[1:])
+            
+            # Check if container is Tardis-enabled
+            if not self.config_handler.is_tardis_enabled(container_id, namespace):
+                logger.info("Container %s not Tardis-enabled, passing through", container_id)
+                return self._execute_command(args[1:])
+
+            # Check if state exists, if not create it
+            if not self.flag_manager.has_flag(namespace, container_id):
+                logger.info("Creating flag for container %s in namespace %s", container_id, namespace)
+                self.flag_manager.create_flag(namespace, container_id)
+            
+            # Handle specific commands
+            if subcommand == "create":
+                return self._handle_create_command(container_id, namespace, global_options, subcommand_options, args[1:])
+            elif subcommand == "start":
+                return self._handle_start_command(container_id, namespace, global_options, subcommand_options, args[1:])
+            elif subcommand == "delete":
+                return self._handle_delete_command(container_id, namespace, global_options, subcommand_options, args[1:])
+            elif subcommand == "checkpoint":
+                return self._handle_checkpoint_command(container_id, namespace, global_options, subcommand_options, args[1:])
+            elif subcommand == "resume":
+                return self._handle_resume_command(container_id, namespace, global_options, subcommand_options, args[1:])
+            else:
+                logger.info("Unhandled command %s, passing through", subcommand)
+                return self._execute_command(args[1:])
+        except Exception as e:
+            logger.warning("Error in command processing: %s, proceeding with original command", str(e))
+            return self._execute_command(args[1:])
+
+    def _handle_checkpoint_command(self, container_id: str, namespace: str, global_options: Dict[str, str], 
+                                 subcommand_options: Dict[str, str], args: List[str]) -> int:
+        """Handle checkpoint command processing."""
+        logger.info("Processing checkpoint command for container %s in namespace %s", container_id, namespace)
+        
+        # Get checkpoint path and upperdir
+        checkpoint_path, upperdir = self._get_container_paths(container_id, namespace)
+        if not checkpoint_path or not upperdir:
+            logger.warning("Could not determine container paths for container %s in namespace %s", container_id, namespace)
+            return self._execute_command(args)
+        
+        try:
+            # Save container files first
+            logger.info("Saving container files to checkpoint at %s", checkpoint_path)
+            if not self.checkpoint_handler.save_checkpoint_file(upperdir, checkpoint_path):
+                logger.warning("Failed to save container files for container %s in namespace %s", container_id, namespace)
+                return self._execute_command(args)
+            
+            # Set skip_resume flag
+            logger.info("Setting skip_resume and keep_resources flags for container %s", container_id)
+            self.flag_manager.set_skip_resume(namespace, container_id, True)
+            self.flag_manager.set_keep_resources(namespace, container_id, True)
+            
+            # Build and execute checkpoint command
+            checkpoint_cmd = self._build_checkpoint_command(
+                container_id=container_id,
+                namespace=namespace,
+                global_options=global_options,
+                subcmd_options=subcommand_options,
+                checkpoint_path=checkpoint_path
+            )
+            
+            logger.info("Executing checkpoint command for container %s", container_id)
+            return self._execute_command(checkpoint_cmd)
+                
+        except Exception as e:
+            logger.warning("Checkpoint failed: %s for container %s in namespace %s", str(e), container_id, namespace)
+            return self._execute_command(args)
+
+    def _build_checkpoint_command(self, container_id: str, namespace: str, global_options: Dict[str, str], 
+                                subcmd_options: Dict[str, str], checkpoint_path: str) -> List[str]:
+        """Build checkpoint command with checkpoint path."""
         # Start with empty command list
         cmd = []
         
@@ -212,143 +338,16 @@ class RuncHandler:
         
         # Add subcommand options, excluding work-path and leave-running
         for opt, value in subcmd_options.items():
-            # Skip work-path and leave-running options
-            if opt in ["--work-path", "--leave-running"]:
-                continue
-                
-            if opt == "--image-path":
-                cmd.extend([opt, checkpoint_path])  # Use our checkpoint path
-            elif value == "":  # Handle options with empty values
-                cmd.append(opt)
-            else:
-                cmd.extend([opt, value])
+            if opt not in ["--work-path", "--leave-running"]:  # Skip work-path and leave-running options
+                if opt == "--image-path":
+                    cmd.extend([opt, checkpoint_path])  # Use our checkpoint path
+                elif value == "":  # Boolean flag
+                    cmd.append(opt)
+                else:
+                    cmd.extend([opt, value])
         
         # Add container ID
         cmd.append(container_id)
         
-        logger.info("Modified checkpoint command: %s", " ".join(cmd))
+        logger.info("Built checkpoint command: %s", " ".join(cmd))
         return cmd
-
-    def _handle_start_command(self, container_id: str, namespace: str, args: List[str]) -> int:
-        """Handle start command processing."""
-        logger.info("Processing start command for container %s in namespace %s", container_id, namespace)
-        
-        # Check skip_start flag
-        if self.state_manager.get_skip_start(namespace, container_id):
-            logger.info("Skip start flag set for container %s, resetting flag and exiting", container_id)
-            self.state_manager.set_skip_start(namespace, container_id, False)
-            return 0
-        
-        # Pass through original command
-        logger.info("No skip start flag for container %s, passing through", container_id)
-        return self._execute_command(args[1:])
-
-    def _handle_resume_command(self, container_id: str, namespace: str, args: List[str]) -> int:
-        """Handle resume command processing."""
-        logger.info("Processing resume command for container %s in namespace %s", container_id, namespace)
-        
-        # Check skip_resume flag
-        if self.state_manager.get_skip_resume(namespace, container_id):
-            logger.info("Skip resume flag set for container %s, resetting flag and exiting", container_id)
-            self.state_manager.set_skip_resume(namespace, container_id, False)
-            return 0
-        
-        # Pass through original command
-        logger.info("No skip resume flag for container %s, passing through", container_id)
-        return self._execute_command(args[1:])
-
-    def _handle_delete_command(self, container_id: str, namespace: str, args: List[str]) -> int:
-        """Handle delete command processing."""
-        logger.info("Starting delete command processing for container %s in namespace %s", container_id, namespace)
-        
-        # Check exit code
-        logger.info("Checking exit code for container %s", container_id)
-        exit_code = self.state_manager.get_exit_code(namespace, container_id)
-        logger.info("Exit code for container %s: %s", container_id, exit_code)
-        
-        if exit_code is not None and exit_code == 0:  # Only cleanup if exit code is 0
-            logger.info("Container %s exited successfully with code 0, proceeding with cleanup", container_id)
-            
-            # Get checkpoint path
-            logger.info("Getting checkpoint path for container %s", container_id)
-            checkpoint_path = self.config_handler.get_checkpoint_path(container_id, namespace)
-            logger.info("Checkpoint path for container %s: %s", container_id, checkpoint_path)
-            
-            # Clean up checkpoint
-            if checkpoint_path:
-                logger.info("Cleaning up checkpoint for container %s at %s", container_id, checkpoint_path)
-                if self.checkpoint_handler.cleanup_checkpoint(checkpoint_path):
-                    logger.info("Successfully cleaned up checkpoint for container %s", container_id)
-                else:
-                    logger.warning("Failed to clean up checkpoint for container %s", container_id)
-            else:
-                logger.info("No checkpoint path found for container %s, skipping cleanup", container_id)
-                
-            # Delete work directory
-            logger.info("Deleting work directory for container %s", container_id)
-            if self.config_handler.delete_work_directory(container_id, namespace):
-                logger.info("Successfully deleted work directory for container %s", container_id)
-            else:
-                logger.warning("Failed to delete work directory for container %s", container_id)
-        
-        # Always clear state regardless of exit code
-        self.state_manager.clear_state(namespace, container_id)
-        logger.info("Cleared state for container %s", container_id)
-        
-        # Pass through original command
-        logger.info("Executing original delete command for container %s", container_id)
-        return self._execute_command(args[1:])
-
-    def _ensure_event_listener(self):
-        """Ensure the event listener is running."""
-        # Get the project root directory (where install.py is located)
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        
-        # Launch event_listener.py as a separate process
-        subprocess.Popen(
-            ["python3", "-m", "src.container_handler.event_listener"],
-            cwd=project_root,
-            env=os.environ.copy()  # Inherit environment for log file path
-        )
-        logger.info("Started event listener process")
-
-    def intercept_command(self, args: List[str]) -> int:
-        """Intercept and process Runc commands."""
-        try:
-            # Log the raw command for debugging
-            logger.info("Raw command received: %s", " ".join(args))
-            
-            # Parse the command
-            subcommand, global_options, subcommand_options, container_id, namespace = self.parser.parse_command(args)
-            logger.info("Intercepted %s command for container %s in namespace %s", subcommand, container_id, namespace)
-            
-            # Check if command should be intercepted
-            if subcommand not in INTERCEPTABLE_COMMANDS:
-                logger.info("Command %s not intercepted, passing through", subcommand)
-                return self._execute_command(args[1:])
-            
-            # Check if container is Tardis-enabled
-            if not self.config_handler.is_tardis_enabled(container_id, namespace):
-                logger.info("Container %s not Tardis-enabled, passing through", container_id)
-                return self._execute_command(args[1:])
-                
-            # Start event listener for Tardis-enabled containers
-            self._ensure_event_listener()
-            
-            # Handle specific commands
-            if subcommand == "create":
-                return self._handle_create_command(container_id, namespace, global_options, subcommand_options, args[1:])
-            elif subcommand == "checkpoint":
-                return self._handle_checkpoint_command(container_id, namespace, global_options, subcommand_options)
-            elif subcommand == "start":
-                return self._handle_start_command(container_id, namespace, args)
-            elif subcommand == "resume":
-                return self._handle_resume_command(container_id, namespace, args)
-            elif subcommand == "delete":
-                return self._handle_delete_command(container_id, namespace, args)
-            else:
-                logger.info("Unhandled command %s, passing through", subcommand)
-                return self._execute_command(args[1:])
-        except Exception as e:
-            logger.error("Error intercepting command: %s", str(e))
-            return 1

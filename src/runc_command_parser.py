@@ -67,7 +67,7 @@ class RuncCommandParser:
         if i >= len(args):
             # This is a global-only command like --version or --help
             logger.info("Detected global-only command")
-            return "", global_options, {}, "", "default"
+            raise ValueError("No subcommand found")
             
         # Parse subcommand
         subcommand = args[i]
@@ -94,13 +94,13 @@ class RuncCommandParser:
                     subcommand_options[normalized_opt] = ""
                     i += 1
             else:
-                i += 1  # Skip non-option arguments
+                break  # Found container ID
         
-        # Get container ID (last argument if it exists and isn't an option)
+        # Get container ID (must be after subcommand and options)
         container_id = ""
-        if args and not (args[-1].startswith("--") or args[-1].startswith("-")):
-            container_id = args[-1]
-        
+        if i < len(args) and not (args[i].startswith("--") or args[i].startswith("-")):
+            container_id = args[i]
+            
         # Extract namespace from root path
         namespace = 'default'
         if '--root' in global_options:
@@ -109,6 +109,10 @@ class RuncCommandParser:
                 parts = root_path.split('/')
                 if parts:  # If there's at least one part
                     namespace = parts[-1]
+            
+        if not container_id:
+            logger.warning("No container ID found in command")
+            return subcommand, global_options, subcommand_options, "", namespace
         
         logger.info(f"Parsed command: subcommand={subcommand}, "
                     f"global_options={global_options}, "

@@ -34,8 +34,10 @@ echo "Running setup script..."
 #IMAGE_ID="py_counter_img"
 IMAGE_ID="cmd_counter_img"
 CONTAINER_ID="tc"
-BASE_PATH="/home/ec2-user/Tardis2"
+BASE_PATH="/home/ec2-user/new-tardis/data"
 MYEBS_MOUNT_PATH="$BASE_PATH/data/myEBSMount"
+
+cd /home/ec2-user/new-tardis/tests/system
 
 # Generate docker image if -b option is provided
 if [ $BUILD_IMAGE -eq 1 ]; then
@@ -65,8 +67,8 @@ echo "Start container task ..."
 #echo "sudo ctr run --detach --mount type=bind,src=$MYEBS_MOUNT_PATH,dst=/tmp,options=rbind --cwd /tmp docker.io/library/$IMAGE_ID:latest $CONTAINER_ID"
 #if ! sudo ctr run --detach --mount type=bind,src=$MYEBS_MOUNT_PATH,dst=/tmp,options=rbind --cwd /tmp docker.io/library/"$IMAGE_ID":latest "$CONTAINER_ID"; then
 #if ! sudo ctr run --detach --env TARDIS_ENABLE=1 --env TARDIS_CHECKPOINT_HOST_PATH=$BASE_PATH/data/checkpoints --env TARDIS_ENABLE_MANAGED_EBS=1 --env TARDIS_MANAGED_EBS_SIZE_GB=2 --env TARDIS_MANAGED_EBS_MOUNT_PATH=/tmp docker.io/library/"$IMAGE_ID":latest "$CONTAINER_ID"; then
-if ! sudo ctr run --detach --env TARDIS_ENABLE=1 --env TARDIS_CHECKPOINT_HOST_PATH=$BASE_PATH/data docker.io/library/"$IMAGE_ID":latest "$CONTAINER_ID"; then
-#if ! sudo ctr run --detach --env TARDIS_CHECKPOINT_HOST_PATH=$BASE_PATH/data/checkpoints docker.io/library/"$IMAGE_ID":latest "$CONTAINER_ID"; then
+#if ! sudo ctr run --detach --env TARDIS_ENABLE=1 --env TARDIS_CHECKPOINT_HOST_PATH=$BASE_PATH docker.io/library/"$IMAGE_ID":latest "$CONTAINER_ID"; then
+if ! sudo ctr run --detach --env TARDIS_ENABLE=1 --env TARDIS_NETWORKFS_HOST_PATH=$BASE_PATH docker.io/library/"$IMAGE_ID":latest "$CONTAINER_ID"; then
   error_exit $LINENO
 fi
 
