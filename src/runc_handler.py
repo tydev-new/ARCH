@@ -213,13 +213,14 @@ class RuncHandler:
         
         # Check if flag file exists
         if self.flag_manager.has_flag(namespace, container_id):
+            logger.info("Flag file found for container %s in namespace %s", container_id, namespace)
             # Check if keep_resources is false
             if not self.flag_manager.get_keep_resources(namespace, container_id):
                 logger.info("Keep resources flag is false for container %s, cleaning up resources", container_id)
                 # Clean up resources
                 self._cleanup_container_resources(container_id, namespace)
-                # Clear flag
-                self.flag_manager.clear_flag(namespace, container_id)
+            # Clear flag
+            self.flag_manager.clear_flag(namespace, container_id)
         
         # Execute the real runc delete command
         logger.info("Executing delete command for container %s", container_id)
