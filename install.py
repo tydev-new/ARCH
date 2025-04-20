@@ -14,19 +14,21 @@ def check_root():
         sys.exit(1)
 
 def check_dependencies():
-    """Check and install required dependencies."""
-    try:
-        import pkg_resources
-        required = {'criu', 'containerd', 'runc'}
-        installed = {pkg.key for pkg in pkg_resources.working_set}
-        missing = required - installed
-
-        if missing:
-            logger.info(f"Installing missing dependencies: {missing}")
-            subprocess.check_call([sys.executable, '-m', 'pip', 'install', *missing])
-
-    except Exception as e:
-        logger.error(f"Failed to check/install dependencies: {str(e)}")
+    """Check if required system packages are installed."""
+    required = {'criu', 'containerd', 'runc'}
+    missing = set()
+    
+    for pkg in required:
+        try:
+            subprocess.run(['which', pkg], check=True, capture_output=True)
+        except subprocess.CalledProcessError:
+            missing.add(pkg)
+    
+    if missing:
+        logger.error("Missing required system packages: %s", missing)
+        logger.error("Please install them using your system package manager:")
+        logger.error("  apt: sudo apt-get install %s", " ".join(missing))
+        logger.error("  yum: sudo yum install %s", " ".join(missing))
         sys.exit(1)
 
 def find_runc_path() -> str:
@@ -43,36 +45,8 @@ def find_runc_path() -> str:
     raise FileNotFoundError("Could not find runc binary using which command")
 
 def is_already_installed() -> bool:
-    """Check if ARCH is already installed"""
-    try:
-        # Check environment variable
-        backup_path = os.environ.get(ENV_REAL_RUNC_CMD)
-        if not backup_path:
-            logger.info("Environment variable not set")
-            return False
-            
-        # Check if backup exists
-        if not os.path.exists(backup_path):
-            logger.info("Backup file not found")
-            return False
-            
-        # Find the real runc binary
-        real_runc_path = find_runc_path()
-        
-        # Check if current runc is our wrapper script
-        if not os.path.exists(real_runc_path):
-            logger.info("runc not found")
-            return False
-            
-        if not os.path.isfile(real_runc_path):
-            logger.info("runc is not a file")
-            return False
-            
-        logger.info("ARCH is already installed")
-        return True
-    except Exception as e:
-        logger.info(f"Error checking installation: {str(e)}")
-        return False
+    """Check if ARCH is already installed by checking config file"""
+    return os.path.exists(CONFIG_PATH)
 
 def install_wrapper():
     """Install the wrapper script"""
@@ -102,15 +76,21 @@ def install_wrapper():
             f.write(f"{ENV_REAL_RUNC_CMD}={backup_path}\n")
         logger.info(f"Saved configuration to {CONFIG_PATH}")
         
+        # Get wrapper script path and validate
+        wrapper_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src", "main.py")
+        if not os.path.exists(wrapper_script):
+            logger.error(f"Wrapper script not found at {wrapper_script}")
+            return False
+        
         # Install wrapper script
         wrapper_content = f"""#!/bin/sh
 # ARCH wrapper for runc
-MAIN_SCRIPT="{os.path.dirname(os.path.dirname(os.path.abspath(__file__)))}/src/main.py"
+ARCH_RUNC_WRAPPER="{wrapper_script}"
 REAL_RUNC="{backup_path}"
 
-if [ -f "$MAIN_SCRIPT" ]; then
-    cd "$(dirname "$(dirname "$MAIN_SCRIPT")")"
-    exec python3 -m "$MAIN_SCRIPT" "$@"
+if [ -f "$ARCH_RUNC_WRAPPER" ]; then
+    cd "$(dirname "$(dirname "$ARCH_RUNC_WRAPPER")")"
+    exec python3 -m src.main "$@"
 else
     exec "$REAL_RUNC" "$@"
 fi
@@ -193,14 +173,15 @@ def check_runc_dependency():
 def main():
     """Main entry point"""
     check_root()
-    check_runc_dependency()
     
     if len(sys.argv) > 1 and sys.argv[1] == "--uninstall":
         if uninstall():
             sys.exit(0)
         else:
             sys.exit(1)
-    
+
+    check_dependencies()
+    check_runc_dependency()    
     if install_wrapper():
         sys.exit(0)
     else:

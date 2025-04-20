@@ -169,7 +169,7 @@ class ContainerConfigHandler:
             return True  # No sharedfs path, nothing to do
             
         # Get destination path from ARCH_WORKDIR_CONTAINER_PATH, default to /tmp
-        dest_path = self._get_env_path(container_id, namespace, "ARCH_WORKDIR_CONTAINER_PATH", default="/tmp")
+        dest_path = self._get_env_var_value(container_id, namespace, "ARCH_WORKDIR_CONTAINER_PATH", default="/tmp")
         
         # Build source path under work directory
         source_path = os.path.join(sharedfs_path, "work", namespace, container_id)

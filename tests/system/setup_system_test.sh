@@ -34,10 +34,10 @@ echo "Running setup script..."
 #IMAGE_ID="py_counter_img"
 IMAGE_ID="cmd_counter_img"
 CONTAINER_ID="tc"
-BASE_PATH="/home/ec2-user/new-tardis/data"
+BASE_PATH="/home/ec2-user/ARCH/data"
 MYEBS_MOUNT_PATH="$BASE_PATH/data/myEBSMount"
 
-cd /home/ec2-user/new-tardis/tests/system
+cd /home/ec2-user/ARCH/tests/system
 
 # Generate docker image if -b option is provided
 if [ $BUILD_IMAGE -eq 1 ]; then
