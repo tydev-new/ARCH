@@ -59,7 +59,7 @@ rm -rf ARCH-main ARCH.zip
 sudo python3 install.py
 ```
 
-## 🛠️ Enable container workload
+## 🛠️ Operations
 ARCH has two entrypoints:
 - `main.py`: The shim layer between Containerd and Runc, it automatically restores containers from checkpoint images. It's configured by the installer - no additional action required.
 - `container_finalizer.py`: Command to checkpoint all ARCH-enabled containers on the node. This should be invoked upon receiving spot instance reclaim warnings. Example usage:
