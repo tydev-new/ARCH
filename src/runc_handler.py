@@ -108,6 +108,9 @@ class RuncHandler:
         logger.info("Processing create command for container %s in namespace %s", container_id, namespace)
         logger.info("Original command: %s", arg)
 
+        # Create flag file for container
+        self.flag_manager.create_flag(namespace, container_id)
+
         # Get checkpoint path and upperdir
         checkpoint_path, upperdir = self._get_container_paths(container_id, namespace)
         if not checkpoint_path or not upperdir:
@@ -151,6 +154,11 @@ class RuncHandler:
                             subcommand_options: Dict[str, str], args: List[str]) -> int:
         """Handle start command processing."""
         logger.info("Processing start command for container %s in namespace %s", container_id, namespace)
+        
+        # Check if flag exists
+        if not self.flag_manager.has_flag(namespace, container_id):
+            logger.info("No flag found for container %s, passing through", container_id)
+            return self._execute_command(args)
         
         # Check skip_start flag
         if self.flag_manager.get_skip_start(namespace, container_id):
@@ -211,19 +219,24 @@ class RuncHandler:
         """Handle delete command processing."""
         logger.info("Processing delete command for container %s in namespace %s", container_id, namespace)
         
-        # Check if flag file exists
-        if self.flag_manager.has_flag(namespace, container_id):
-            logger.info("Flag file found for container %s in namespace %s", container_id, namespace)
-            # Check if keep_resources is false
-            if not self.flag_manager.get_keep_resources(namespace, container_id):
-                logger.info("Keep resources flag is false for container %s, cleaning up resources", container_id)
-                # Clean up resources
-                self._cleanup_container_resources(container_id, namespace)
-            # Clear flag
-            self.flag_manager.clear_flag(namespace, container_id)
+        # Check if flag exists
+        if not self.flag_manager.has_flag(namespace, container_id):
+            logger.info("No flag found for container %s, passing through", container_id)
+            return self._execute_command(args)
         
-        # Execute the real runc delete command
-        logger.info("Executing delete command for container %s", container_id)
+        # Get container state
+        state = self.runtime_state.get_container_state(container_id, namespace)
+        if state != "stopped":
+            logger.warning("Container %s is not stopped, cannot delete", container_id)
+            return 1
+            
+        # Cleanup container resources
+        self._cleanup_container_resources(container_id, namespace)
+        
+        # Clear flag file
+        self.flag_manager.clear_flag(namespace, container_id)
+        
+        # Execute delete command
         return self._execute_command(args)
 
     def _execute_command(self, args: List[str]) -> int:
@@ -261,11 +274,12 @@ class RuncHandler:
             if not self.config_handler.is_arch_enabled(container_id, namespace):
                 logger.info("Container %s not ARCH-enabled, passing through", container_id)
                 return self._execute_command(args[1:])
-
-            # Check if state exists, if not create it
-            if not self.flag_manager.has_flag(namespace, container_id):
-                logger.info("Creating flag for container %s in namespace %s", container_id, namespace)
-                self.flag_manager.create_flag(namespace, container_id)
+            
+            # Create flag if container_id is present
+            if container_id and namespace:
+                if not self.flag_manager.has_flag(namespace, container_id):
+                    logger.info("Creating flag for container %s in namespace %s", container_id, namespace)
+                    self.flag_manager.create_flag(namespace, container_id)
             
             # Handle specific commands
             if subcommand == "create":

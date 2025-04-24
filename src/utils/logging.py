@@ -23,9 +23,13 @@ def setup_logger(name: str, level: Optional[int] = None, log_file: str = LOG_FIL
     
     logger = logging.getLogger(name)
     
+    # Set default level to INFO if not specified
     if level is None:
-        level = os.environ.get('ARCH_LOG_LEVEL', 'INFO').upper()
-        level = getattr(logging, level, logging.INFO)
+        env_level = os.environ.get('ARCH_LOG_LEVEL', 'INFO').upper()
+        try:
+            level = getattr(logging, env_level)
+        except AttributeError:
+            level = logging.INFO
     
     logger.setLevel(level)
     

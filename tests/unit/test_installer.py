@@ -96,13 +96,15 @@ def test_install_wrapper_already_installed():
 def test_install_wrapper_success():
     with patch('install.is_already_installed', return_value=False), \
          patch('install.find_runc_path', return_value="/usr/bin/runc"), \
-         patch('os.path.exists', return_value=False), \
+         patch('os.path.exists', side_effect=lambda path: path == "/path/to/src/main.py"), \
+         patch('os.makedirs'), \
          patch('shutil.copy2'), \
          patch('os.remove'), \
          patch('builtins.open', mock_open()), \
          patch('os.chmod'), \
          patch('os.path.abspath', return_value="/path/to/main.py"), \
-         patch('os.path.dirname', return_value="/path/to"):
+         patch('os.path.dirname', return_value="/path/to"), \
+         patch('os.path.join', side_effect=lambda *args: "/".join(args)):
         assert install_wrapper() is True
 
 def test_cleanup_runc_wrapper_not_installed():

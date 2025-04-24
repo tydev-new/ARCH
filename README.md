@@ -33,7 +33,8 @@ ARCH requires the following dependencies:
 - Container runtime: Containerd ([containerd/containerd](https://github.com/containerd/containerd)) 
 - OCI container runtime: Runc ([opencontainers/runc](https://github.com/opencontainers/runc)) 
 - Process checkpoint/restore: CRIU ([checkpoint-restore/criu](https://github.com/checkpoint-restore/criu))
-
+- CPU Architecture: x86_64, ARM64
+- Operating System: Linux (kernel 4.15 or later)
 
 ### Full Installation
 1. Clone the repository (recommended for full access to all features):

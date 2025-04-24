@@ -1,8 +1,40 @@
 # ARCH Unit Test Plan
 
-## 1. Unit Tests
+## 1. Test Coverage Requirements
 
-### 1.1 RuncHandler Tests
+### 1.1 Code Coverage
+- Minimum 80% line coverage
+- 100% coverage of public methods
+- Critical path coverage
+
+### 1.2 Test Categories
+- Happy path tests
+- Error handling tests
+- Edge cases
+- Resource cleanup
+
+## 2. Test Environment and Execution
+
+### 2.1 Prerequisites
+- Python 3.8+
+- pytest
+- mock
+- Test directories created
+
+### 2.2 Test Data
+- Sample container config
+- Test files and directories
+- Checkpoint images
+- Log files
+
+### 2.3 Test Execution
+```bash
+python3 -m pytest tests/unit/ -v
+```
+
+## 3. Unit Tests
+
+### 3.1 RuncHandler Tests
 - **Command Interception**
   - Test non-interceptable commands
     - Input: `["runc", "list"]`
@@ -206,7 +238,7 @@
         - execvp called with delete command
         - cleanup performed
 
-### 1.2 ConfigHandler Tests
+### 3.2 ConfigHandler Tests
 - **Container Configuration**
   - Test ARCH_ENABLE flag detection
     - Input: config.json with ARCH_ENABLE=1
@@ -347,7 +379,7 @@
         - delete_work_dir returns False
         - error logged
 
-### 1.3 CheckpointHandler Tests
+### 3.3 CheckpointHandler Tests
 - **Checkpoint Operations**
   - Test checkpoint image creation
     - Test successful creation
@@ -423,7 +455,7 @@
         - cleanup_checkpoint returns False
         - error logged
 
-### 1.4 FilesystemHandler Tests
+### 3.4 FilesystemHandler Tests
 - **File Operations**
   - Test upperdir management
     - Test successful get
@@ -484,7 +516,7 @@
         - cleanup_path returns False
         - error logged
 
-### 1.5 Command Parser Tests
+### 3.5 Command Parser Tests
 - **Command Parsing**
   - Test global options parsing
     - Test with options
@@ -615,43 +647,9 @@
         - parse_command returns correct tuple format
         - empty container ID returned
 
-## 2. Test Environment Setup
+## 4. Test Documentation
 
-### 2.1 Prerequisites
-- Python 3.8+
-- pytest
-- mock
-- Test directories created
-
-### 2.2 Test Data
-- Sample container config
-- Test files and directories
-- Checkpoint images
-- Log files
-
-## 3. Test Execution
-
-### 3.1 Unit Test Execution
-```bash
-python3 -m pytest tests/unit/ -v
-```
-
-## 4. Test Coverage Requirements
-
-### 4.1 Code Coverage
-- Minimum 80% line coverage
-- 100% coverage of public methods
-- Critical path coverage
-
-### 4.2 Test Categories
-- Happy path tests
-- Error handling tests
-- Edge cases
-- Resource cleanup
-
-## 5. Test Documentation
-
-### 5.1 Test Cases
+### 4.1 Test Cases
 - Test case ID
 - Description
 - Prerequisites
@@ -659,7 +657,7 @@ python3 -m pytest tests/unit/ -v
 - Expected results
 - Actual results
 
-### 5.2 Test Results
+### 4.2 Test Results
 - Test execution logs
 - Coverage reports
 - Error logs

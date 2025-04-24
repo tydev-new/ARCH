@@ -14,7 +14,13 @@ def check_root():
         sys.exit(1)
 
 def check_dependencies():
-    """Check if required system packages are installed."""
+    """Check if required system packages and Python version are compatible."""
+    # Check Python version
+    if sys.version_info < (3, 6):
+        logger.error("Python 3.6 or higher is required")
+        sys.exit(1)
+        
+    # Check system packages
     required = {'criu', 'containerd', 'runc'}
     missing = set()
     
@@ -45,8 +51,25 @@ def find_runc_path() -> str:
     raise FileNotFoundError("Could not find runc binary using which command")
 
 def is_already_installed() -> bool:
-    """Check if ARCH is already installed by checking config file"""
-    return os.path.exists(CONFIG_PATH)
+    """Check if ARCH is already installed by checking environment variable and backup file"""
+    # Check if environment variable exists
+    real_runc = os.environ.get(ENV_REAL_RUNC_CMD)
+    if not real_runc:
+        return False
+        
+    # Check if backup file exists and is a file
+    if not os.path.exists(real_runc) or not os.path.isfile(real_runc):
+        return False
+        
+    # Check if current runc is our wrapper
+    try:
+        runc_path = find_runc_path()
+        if not os.path.isfile(runc_path):
+            return False
+    except FileNotFoundError:
+        return False
+        
+    return True
 
 def install_wrapper():
     """Install the wrapper script"""
