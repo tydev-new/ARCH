@@ -11,7 +11,7 @@ This document outlines the implementation plan for ARCH, including detailed task
 
 ## Engineering Task Breakdown
 
-### 1. ARCH Wrapper Implementation
+### 1. ARCH Shim Implementation
 
 #### Command Interception
 - Create a mechanism to intercept Runc commands from Containerd
