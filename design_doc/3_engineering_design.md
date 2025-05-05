@@ -2,7 +2,7 @@
 
 ## Architecture Overview
 
-ARCH acts as a wrapper between Containerd and Runc, intercepting Runc commands, processing them, and calling the real Runc with modified commands when necessary. The architecture consists of the following components:
+ARCH acts as a shim between Containerd and Runc, intercepting Runc commands, processing them, and calling the real Runc with modified commands when necessary. The architecture consists of the following components:
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -24,7 +24,7 @@ ARCH acts as a wrapper between Containerd and Runc, intercepting Runc commands, 
 
 ## Component Breakdown
 
-### 1. ARCH Wrapper
+### 1. ARCH 
 
 The main component that intercepts Runc commands from Containerd.
 
@@ -96,20 +96,6 @@ Manages container configuration and state.
 8. Checkpoint Handler updates container state
 
 ### Restore Flow
-
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  Containerd │────▶│    ARCH     │────▶│ Checkpoint  │
-│             │     │             │     │   Handler   │
-└─────────────┘     └─────────────┘     └─────────────┘
-                           │                    │
-                           │                    │
-                           ▼                    ▼
-                    ┌─────────────┐     ┌─────────────┐
-                    │  Container  │     │    Runc     │
-                    │   Handler   │◀────│             │
-                    └─────────────┘     └─────────────┘
-```
 
 1. Containerd sends a create command to ARCH
 2. ARCH parses the command and determines if the container is ARCH-enabled
