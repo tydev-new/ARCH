@@ -11,7 +11,6 @@
 - Happy path tests
 - Error handling tests
 - Edge cases
-- Resource cleanup
 
 ## 2. Test Environment and Execution
 

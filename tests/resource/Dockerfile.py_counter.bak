@@ -1,0 +1,4 @@
+FROM python:3.10-slim
+COPY py_counter.py /usr/bin/py_counter.py
+RUN chmod +x /usr/bin/py_counter.py
+CMD ["/usr/bin/py_counter.py"]

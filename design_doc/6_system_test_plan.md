@@ -1,248 +1,134 @@
 # ARCH System Test Plan
 
-## 1. System Tests
+## 1. Introduction
 
-### 1.1 Basic Mode Tests
-- **Local Checkpoint**
-  - Test container creation
-    - Input: `runc create --bundle /path/to/bundle container1`
-    - Expected Output: `0` (success)
-    - Assertions:
-      - Container created successfully
-      - Flag file created
-      - Container state initialized
+This doc outlines the system-level test plan for ARCH (Automated Restore for Container Handler). The goal is to validate the functionality, performance, reliability, and interoperability of ARCH according to the design specifications.
 
-  - Test checkpoint creation
-    - Input: `runc checkpoint container1`
-    - Expected Output: `0` (success)
-    - Assertions:
-      - Checkpoint image created
-      - Container files saved
-      - Skip resume flag set
+The test plan covers the entire ARCH system, including:
+- Checkpointing
+- Restoring
+- Migrating different container workloads
+- CLI interfaces
+- Integration with containerd and runc
+- Interoperability with container orchestrators
 
-  - Test container restore
-    - Input: `runc create --bundle /path/to/bundle container1`
-    - Expected Output: `0` (success)
-    - Assertions:
-      - Container restored from checkpoint
-      - Files restored correctly
-      - Skip start flag set
+### References
+- Product Requirements Document (PRD)
+- Engineering Requirements Document (ERD)
+- Software Design Documents
+- GitHub Repository: [GitHub - tydev-new/ARCH](https://github.com/tydev-new/ARCH)
 
-  - Test cleanup on delete
-    - Input: `runc delete container1`
-    - Expected Output: `0` (success)
-    - Assertions:
-      - Checkpoint files cleaned up
-      - Flag file deleted
-      - Container resources released
+## 2. Test Items
 
-  - Test error handling
-    - Test invalid checkpoint
-      - Input: `runc create --bundle /path/to/bundle container1`
-      - Expected Output: `1` (error)
-      - Assertions:
-        - Error logged
-        - Fallback to create
-        - Flag file created
+- RUNCShim (wrapper for runc OCI runtime, called by containerd)
+- ARCH CLI
+- Installer
 
-    - Test restore failure
-      - Input: `runc create --bundle /path/to/bundle container1`
-      - Expected Output: `1` (error)
-      - Assertions:
-        - Error logged
-        - Fallback to create
-        - Flag file created
+## 3. Features to be Tested
 
-### 1.2 Network FS Mode Tests
-- **Shared Filesystem**
-  - Test container creation with shared FS
-    - Input: `runc create --bundle /path/to/bundle container1`
-    - Expected Output: `0` (success)
-    - Assertions:
-      - Container created successfully
-      - Bind mount added
-      - Flag file created
+### Tested Features
+- Container Checkpoint Creation: Including both process and file state
+- Container Restoration: Validate restoration from checkpoint images
+- Enable checkpoint and shared filesystem: Using container environment variables
+- Migration Across Nodes: Test moving containers between nodes using stored checkpoint data
 
-  - Test work directory mounting
-    - Input: `runc checkpoint container1`
-    - Expected Output: `0` (success)
-    - Assertions:
-      - Work directory mounted
-      - Checkpoint created in shared FS
-      - Skip resume flag set
+### Not Tested
+- The kernel-level CRIU (Checkpoint/Restore In Userspace) functionalities, which are indirectly tested through runc
+- Performance benchmarking beyond basic functional validation
+- Load testing
+- User management or access control (not in initial scope)
 
-  - Test checkpoint in shared FS
-    - Input: `runc checkpoint container1`
-    - Expected Output: `0` (success)
-    - Assertions:
-      - Checkpoint created in shared FS
-      - Files saved correctly
-      - Skip resume flag set
+## 4. Test Environment and Workload
 
-  - Test restore from shared FS
-    - Input: `runc create --bundle /path/to/bundle container1`
-    - Expected Output: `0` (success)
-    - Assertions:
-      - Container restored from shared FS
-      - Files restored correctly
-      - Skip start flag set
+### Hardware Requirements
+- AWS t3.medium instance as reference
+- Minimum 4GB RAM
+- 20GB disk space for test images and checkpoints
 
-  - Test cleanup
-    - Input: `runc delete container1`
-    - Expected Output: `0` (success)
-    - Assertions:
-      - Checkpoint files cleaned up
-      - Work directory unmounted
-      - Flag file deleted
+### Software Requirements
+- Amazon Linux 2023 (primary)
+- CRIU v3.17 or above
+- ARCH, runc, containerd properly installed
+- Docker for container image creation
 
-### 1.3 Integration Tests
-- **Container Lifecycle**
-  - Test complete container lifecycle
-    - Steps:
-      1. Create container
-      2. Start container
-      3. Checkpoint container
-      4. Delete container
-      5. Create container from checkpoint
-      6. Start container
-      7. Delete container
-    - Expected Output: `0` (success)
-    - Assertions:
-      - All operations successful
-      - State maintained correctly
-      - Resources cleaned up
+### Future Test Environments (TODO)
+- RockyLinux
+- Ubuntu
 
-  - Test multiple containers
-    - Steps:
-      1. Create multiple containers
-      2. Checkpoint containers
-      3. Delete containers
-      4. Restore containers
-    - Expected Output: `0` (success)
-    - Assertions:
-      - All containers managed correctly
-      - No resource conflicts
-      - Clean state transitions
+### Test Workload
+- Simple counter app that shows timestamp and counter on stdout and write to file
+- Multiple implementations (shell script, Python, C/C++)
+- Various container base images (Ubuntu, RockyLinux, etc)
 
-  - Test error recovery
-    - Steps:
-      1. Create container
-      2. Simulate failure during checkpoint
-      3. Delete container
-      4. Create new container
-    - Expected Output: `0` (success)
-    - Assertions:
-      - System recovers from failure
-      - Resources cleaned up
-      - New container created successfully
+## 5. Test Cases
 
-  - Test resource cleanup
-    - Steps:
-      1. Create multiple containers
-      2. Delete containers with various states
-      3. Verify cleanup
-    - Expected Output: `0` (success)
-    - Assertions:
-      - All resources cleaned up
-      - No leftover files
-      - System in clean state
+### General Steps
+1. Create docker container image with test counter app
+2. Load container image using containerd cli - `ctr image import`
+3. Start container using containerd cli - `ctr run`
+4. Checkpoint container using containerd cli - `ctr container checkpoint`
+5. Cleanup container using containerd cli - `ctr task rm` and `ctr container rm`
+6. Re-start container again using containerd cli - `ctr run`
 
-## 2. Container Process Exit Monitoring
-- **Exit Event Monitoring**
-  - Test successful exit monitoring
-    - Input: Container with exit code 0
-    - Expected Output: Exit event detected with code 0
-    - Assertions:
-      - Exit event parsed correctly
-      - Exit code 0 recorded
-      - Flag file updated
+### Expected Result
+For container started with environment variable `ARCH_ENABLED = yes`, the counter app output file should show continued count, with a gap in the timestamp that matches checkpoint and restart.
 
-  - Test failed exit monitoring
-    - Input: Container with exit code 137
-    - Expected Output: Exit event detected with code 137
-    - Assertions:
-      - Exit event parsed correctly
-      - Exit code 137 recorded
-      - Flag file updated
+The output file is located in container rootfs. While the container is running, it can be accessed from the host under `/usr/lib/containerd/io.xxxxx/[namespace]/[container_id]` using sudo. 
 
-  - Test no exit code monitoring
-    - Input: Container with no exit code
-    - Expected Output: Exit event detected with default code 0
-    - Assertions:
-      - Exit event parsed correctly
-      - Default exit code 0 recorded
-      - Flag file updated
+For container started with environment variable `ARCH_SHAREDFS_HOST_PATH = [path]`, the output file is directly accessible from host under host path.
 
-  - Test multiple container monitoring
-    - Input: Multiple containers with different exit codes
-    - Expected Output: Exit events detected for each container
-    - Assertions:
-      - Exit events parsed correctly for each container
-      - Exit codes recorded correctly
-      - Flag files updated correctly
+### Test with Different Workloads
+- Create and run with docker container image with test counter app written in Python
+- Create and run with docker container image with test counter app written in C
+- Create and run with docker container image with test counter app written in shell script
 
-  - Test non-exit events
-    - Input: Container with non-exit events
-    - Expected Output: Non-exit events ignored
-    - Assertions:
-      - Only exit events processed
-      - Non-exit events ignored
-      - Flag files not updated for non-exit events
+### Test with Different Environment Variable Settings
+- `ARCH_ENABLED = yes / no`
+- `ARCH_CHECKPOINT_HOST_PATH`
+- `ARCH_SHAREDFS_HOST_PATH`
 
-## 3. Test Environment Setup
+## 6. Future Test Cases (TODO)
 
-### 3.1 Prerequisites
-- Docker installed
-- Containerd configured
-- Test container image built
-- Test directories created
+### Error Scenarios
+- Failed checkpoints due to insufficient disk space
+- Network interruptions during checkpoint/restore
+- Invalid checkpoint image handling
+- Container crash during checkpoint
 
-### 3.2 Test Data
-- Sample container config
-- Test files and directories
-- Checkpoint images
-- Log files
+### Concurrent Operations
+- Multiple containers checkpoint/restore simultaneously
+- Resource contention scenarios
+- Network bandwidth sharing
 
-## 4. Test Execution
+### Container Resource Limits
+- CPU limits
+- Memory limits
+- Disk I/O limits
 
-### 4.1 System Test Execution
-```bash
-# Setup
-./tests/system/setup_system_test.sh
+### Environment Variables
+- Invalid/edge case values
+- Variable interactions
+- Missing required variables
 
-# Run tests
-python3 -m pytest tests/system/ -v
+## 7. Test Data Collection and Reporting
 
-# Cleanup
-./tests/system/cleanup_system_test.sh
-```
+### Test Execution Logs
+- Container start/stop times
+- Checkpoint/restore durations
+- Error messages and stack traces
+- System resource usage during operations
 
-## 5. Test Coverage Requirements
+### Test Results
+- Pass/fail status for each test case
+- Detailed error descriptions
+- System configuration details
+- Test environment information
 
-### 5.1 Test Categories
-- Happy path tests
-- Error handling tests
-- Edge cases
-- Resource cleanup
-
-### 5.2 Performance Metrics
-- Container creation time
-- Checkpoint creation time
-- Restore time
-- Resource usage
-
-## 6. Test Documentation
-
-### 6.1 Test Cases
+### Reporting Format
 - Test case ID
-- Description
-- Prerequisites
-- Steps
-- Expected results
-- Actual results
-
-### 6.2 Test Results
-- Test execution logs
-- Error logs
-- Performance metrics
-- Resource usage reports 
+- Test description
+- Expected result
+- Actual result
+- Error details (if any)
+- System logs reference
+- Test environment details

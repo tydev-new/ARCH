@@ -1,0 +1,4 @@
+FROM alpine:3.16
+COPY sh_counter.sh /usr/bin/sh_counter.sh
+RUN chmod +x /usr/bin/sh_counter.sh
+CMD ["/usr/bin/sh_counter.sh"]

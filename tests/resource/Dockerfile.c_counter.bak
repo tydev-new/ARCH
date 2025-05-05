@@ -1,0 +1,4 @@
+FROM alpine:3.19
+COPY c_counter.exe /usr/bin/c_counter
+RUN chmod +x /usr/bin/c_counter
+CMD ["/usr/bin/c_counter"]
