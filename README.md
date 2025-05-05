@@ -1,12 +1,12 @@
 # 🚀 ARCH - Automated Restore for Container Handler
 
-ARCH enables seamless container migration across nodes and time through automated checkpoint-and-restore functionality. It allows containers to survive spot instance reclaims, pause during peak hours, and restore without losing progress. 
+ARCH enables automated container checkpoint-and-restore. With ARCH, containers can seamlessly migrate across nodes and time. It allows containers to survive spot instance reclaims, pause during peak hours, and restore without losing progress. 
 
 In practical terms, 
-- For cloud users, can safely run containerized batch workload on spot instances, with cost savings up to 90% on cloud compute resources
-- For onprem users, significantly improve resource utilization and scheduled completion time for long running batch workload
+- For cloud users, they can safely run containerized batch workload on spot instances, with cost savings up to 90% on cloud compute resources
+- For on-prem users, they can significantly improve resource utilization and scheduled completion time for long-running batch workload
 
-Furthermore, ARCH achieves this with zero application modifications and seamless integration with existing workflows.
+Furthermore, ARCH requires no modifications to existing applications and workflow.
 
 ## ⚙️ Key Features
 
@@ -18,7 +18,17 @@ Furthermore, ARCH achieves this with zero application modifications and seamless
 
 ## 🧠 Why ARCH?
 
-In addition to making infrastructures more efficient, ARCH explores how AI can supercharge development of infrastructure software.
+Looking at existing open source efforts:
+- CRIU checkpoints application processes
+- Runc and Containerd integrate CRIU
+However, there are significant gaps in building a production system, specifically:
+-  CRIU only checkpoints the application process states, not file system states, leaving the checkpoint incomplete.
+-  Runc CLI does not provide automated checkpoint and restore mechanism
+-  Containerd CLI does not export and import images created from checkpoint
+
+ARCH bridges all these gaps.
+
+In addition, I started ARCH to explore how AI can supercharge infrastructure software development - more to follow.
 
 ## 🧪 Usage 
 
@@ -114,7 +124,7 @@ ARCH/
 ├── src/
 │   ├── container_handler/    # Core container management
 │   ├── checkpoint_handler.py # Checkpoint/restore logic
-│   ├── runc_handler.py      # runC integration
+│   ├── runc_handler.py      # runC shim
 │   └── utils/               # Helper utilities
 ├── tests/
 │   ├── unit/               # Unit tests
@@ -150,7 +160,7 @@ We welcome contributions! Please:
 
 ## 📝 License
 
-Copyright 2025 ARCH Contributors
+Copyright 2025 Yong Tian and ARCH Contributors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
