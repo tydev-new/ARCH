@@ -37,7 +37,7 @@ CONTAINER_ID="tc"
 BASE_PATH="/home/ec2-user/ARCH"
 HOST_PATH="$BASE_PATH/data"
 
-cd $BASE_PATH/tests/system
+cd $BASE_PATH/tests/system-manual
 
 # Generate docker image if -b option is provided
 if [ $BUILD_IMAGE -eq 1 ]; then

@@ -2,7 +2,18 @@ import logging
 import os
 import sys
 from typing import Optional
-from src.utils.constants import LOG_FILE
+from src.utils.constants import LOG_FILE, DEFAULT_LOG_LEVEL, CONFIG_PATH, USER_CONFIG_PATH
+
+def read_config():
+    """Read logging configuration from config file."""
+    config = {}
+    if os.path.exists(CONFIG_PATH):
+        with open(CONFIG_PATH, 'r') as f:
+            for line in f:
+                if '=' in line:
+                    key, value = line.strip().split('=', 1)
+                    config[key] = value
+    return config
 
 def setup_logger(name: str, level: Optional[int] = None, log_file: str = LOG_FILE) -> logging.Logger:
     """
@@ -16,6 +27,21 @@ def setup_logger(name: str, level: Optional[int] = None, log_file: str = LOG_FIL
     Returns:
         logging.Logger: Configured logger instance
     """
+    # Get config values
+    config = {}
+    if os.path.exists(CONFIG_PATH):
+        with open(CONFIG_PATH, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and '=' in line:
+                    key, value = line.split('=', 1)
+                    config[key.strip()] = value.strip()
+    
+    # Use config file path if available, otherwise use provided path
+    config_log_file = config.get('ARCH_LOG_FILE')
+    if config_log_file:
+        log_file = config_log_file
+    
     # Create logs directory if it doesn't exist
     log_dir = os.path.dirname(log_file)
     if log_dir and not os.path.exists(log_dir):
@@ -25,11 +51,17 @@ def setup_logger(name: str, level: Optional[int] = None, log_file: str = LOG_FIL
     
     # Set default level to INFO if not specified
     if level is None:
-        env_level = os.environ.get('ARCH_LOG_LEVEL', 'INFO').upper()
-        try:
-            level = getattr(logging, env_level)
-        except AttributeError:
-            level = logging.INFO
+        # Try config file first
+        config_level = config.get('ARCH_LOG_LEVEL')
+        if config_level:
+            level = getattr(logging, config_level.upper())
+        else:
+            # Fall back to environment variable
+            env_level = os.environ.get('ARCH_LOG_LEVEL', DEFAULT_LOG_LEVEL).upper()
+            try:
+                level = getattr(logging, env_level)
+            except AttributeError:
+                level = logging.INFO
     
     logger.setLevel(level)
     

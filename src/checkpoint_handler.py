@@ -17,7 +17,7 @@ class CheckpointHandler:
         logger.info(f"Validating checkpoint at {checkpoint_path}")
         dump_log = os.path.join(checkpoint_path, "dump.log")
         if not os.path.exists(dump_log):
-            logger.error("dump.log not found in checkpoint")
+            logger.warning("dump.log not found in checkpoint")
             return False
             
         try:

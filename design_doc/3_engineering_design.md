@@ -208,3 +208,42 @@ Manages container configuration and state.
    - Container context
    - Runc error codes
    - CRIU-specific error messages
+
+## ARCH CLI
+
+The ARCH command-line interface provides utilities for managing ARCH-enabled containers and system configuration.
+
+### Command Structure
+
+```bash
+# Container operations
+arch container finalize 
+
+# Help
+arch --help                           # Show all commands
+```
+
+### Container Operations
+
+**Finalize Container**
+- Purpose: Clean up ARCH-specific resources for a container
+- Usage: `arch container finalize`
+- Effects:
+  - Removes container flag files
+  - Cleans up checkpoint data
+  - Updates container state
+
+### Logging Configuration
+
+Logging configuration is managed through:
+- Command line: `arch log --level LEVEL --file FILE`
+- Environment variables: `ARCH_LOG_LEVEL` and `ARCH_LOG_FILE`
+- Config file: `/etc/arch/arch.env`
+
+Default values:
+- Log level: WARNING
+- Log file: `logs/arch.log`
+
+Configuration is shared between `arch.py` and `main.py` through the config file. Changes take effect:
+- Immediately for `arch.py`
+- On next startup for `main.py`

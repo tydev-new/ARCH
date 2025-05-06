@@ -3,10 +3,10 @@
 import os
 
 # Configuration paths
-CONFIG_DIR = "/etc/arch"
-CONFIG_PATH = os.path.join(CONFIG_DIR, "arch.env")
-STATE_DIR = "/var/lib/arch/state"
-DEFAULT_CHECKPOINT_PATH = "/var/lib/arch/checkpoint"
+USER_CONFIG_DIR = os.path.expanduser("~/.arch")
+CONFIG_PATH = os.path.join(USER_CONFIG_DIR, "arch.env")
+STATE_DIR = os.path.join(USER_CONFIG_DIR, "state")
+DEFAULT_CHECKPOINT_PATH = os.path.join(USER_CONFIG_DIR, "checkpoint")
 
 # Environment variables
 ENV_REAL_RUNC_CMD = "ARCH_REAL_RUNC_CMD"
@@ -51,3 +51,4 @@ CONTAINER_ROOTFS_PATHS = [
 
 # Logging
 LOG_FILE = "logs/arch.log"
+DEFAULT_LOG_LEVEL = "WARNING"

@@ -8,27 +8,45 @@ In practical terms,
 
 Furthermore, ARCH requires no modifications to existing applications and workflow.
 
-## ⚙️ Key Features
-
-- 🔄 Automated container checkpoint and restore
-- 🛠️ Preserve process and file system state in sync
-- 🤖 Minimal configuration required
-- 🧩 No modifications to application, container image, or orchestrator
-- 📦 Multiple storage backends
-
 ## 🧠 Why ARCH?
 
-Looking at existing open source efforts:
-- CRIU checkpoints application processes
-- Runc and Containerd integrate CRIU
-However, there are significant gaps in building a production system, specifically:
--  CRIU only checkpoints the application process states, not file system states, leaving the checkpoint incomplete.
--  Runc CLI does not provide automated checkpoint and restore mechanism
--  Containerd CLI does not export and import images created from checkpoint
+### The Problem
+Container checkpoint-and-restore is a powerful capability, but existing solutions have significant limitations:
 
-ARCH bridges all these gaps.
+1. **Incomplete State Preservation**
+   - CRIU checkpoints application processes and memory state
+   - However, it doesn't handle file system state synchronization
+   - This creates inconsistencies when restoring containers
 
-In addition, I started ARCH to explore how AI can supercharge infrastructure software development - more to follow.
+2. **Manual Operations Required**
+   - Runc CLI requires manual checkpoint/restore commands
+   - Containerd CLI lacks automated checkpoint image management
+   - No built-in support for automated migration
+
+3. **Production Readiness Gaps**
+   - No integrated solution for file system state management
+   - Limited automation for container lifecycle events
+   - Complex configuration for production deployments
+
+### The ARCH Solution
+ARCH bridges these gaps by providing a complete solution for container checkpoint-and-restore:
+
+1. **Complete State Management**
+   - Automated container checkpoint and restore
+   - Synchronized process and file system state preservation
+   - Multiple storage backend support (local and shared filesystems)
+
+2. **Production-Ready Features**
+   - Minimal configuration required
+   - No modifications needed to applications, container images, or orchestrators
+   - Seamless integration with existing container ecosystems
+
+3. **Enterprise-Grade Reliability**
+   - Automated container lifecycle management
+   - Robust error handling and recovery
+   - Comprehensive logging and monitoring
+
+In addition, ARCH serves as an exploration of how AI can enhance infrastructure software development - more details to follow.
 
 ## 🧪 Usage 
 
@@ -73,12 +91,26 @@ sudo python3 install.py
 ## 🛠️ Operations
 ARCH has two entrypoints:
 - `main.py`: The shim layer between Containerd and Runc, it automatically restores containers from checkpoint images. It's configured by the installer - no additional action required.
-- `container_finalizer.py`: Command to checkpoint all ARCH-enabled containers on the node. This should be invoked upon receiving spot instance reclaim warnings. Example usage:
+- `arch-cli`: Command to checkpoint all ARCH-enabled containers on the node. This should be invoked upon receiving spot instance reclaim warnings. Example usage:
   ```bash
   # When spot reclaim warning is received
   cd ARCH
-  python3 -m src.container_finalizer
+  ./arch-cli container finalize
   ```
+
+  Logging can be configured using:
+  ```bash
+  # Set log level (default: WARNING)
+  ./arch-cli log --level DEBUG
+  
+  # Set log file path
+  ./arch-cli log --file /path/to/log
+  
+  # Both at once
+  ./arch-cli log --level INFO --file /path/to/log
+  ```
+
+  Logging configuration is stored in `/etc/arch/arch.env` and will be picked up by both `arch-cli` and `main.py`.
 
 ARCH has two modes of operations, controlled by setting the containerized workload's environment variables.
 
@@ -121,19 +153,25 @@ If `ARCH_SHAREDFS_HOST_PATH` is specified, ARCH ignores the `ARCH_CHECKPOINT_HOS
 
 ```
 ARCH/
-├── src/
-│   ├── container_handler/    # Core container management
+├── src/                      # Source code
+│   ├── container_handler/    # Container management components
+│   ├── utils/               # Helper utilities
+│   ├── arch_cli.py          # Command-line interface
+│   ├── main.py              # Main shim entry point
 │   ├── checkpoint_handler.py # Checkpoint/restore logic
-│   ├── runc_handler.py      # runC shim
-│   └── utils/               # Helper utilities
-├── tests/
-│   ├── unit/               # Unit tests
-│   └── system/             # System tests
-├── design_doc/             # Architecture and design documentation
-└── install.py              # Installation script
+│   ├── runc_handler.py      # runC shim implementation
+│   └── runc_command_parser.py # runC command parsing
+├── tests/                    # Test suite
+│   ├── unit/                # Unit tests
+│   ├── system-auto/         # Automated system tests
+│   ├── system-manual/       # Manual system tests
+│   └── resource/            # Test resources
+├── design_doc/              # Architecture and design documentation
+├── install.py               # Installation script
+└── arch-cli                 # CLI entry point
 ```
 
-The detailed ARCH design can be found under ARCH/design_doc/.
+The detailed ARCH design can be found under `design_doc/`.
 
 ## 🔓 License & Status
 

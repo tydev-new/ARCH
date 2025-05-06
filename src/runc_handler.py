@@ -226,9 +226,9 @@ class RuncHandler:
         
         # Get container state
         state = self.runtime_state.get_container_state(container_id, namespace)
-        if state != "stopped":
+        logger.info("Container %s state: %s", container_id, state)
+        if state[0] != "stopped":
             logger.warning("Container %s is not stopped, cannot delete", container_id)
-            return 1
             
         # Cleanup container resources
         self._cleanup_container_resources(container_id, namespace)
