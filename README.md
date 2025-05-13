@@ -110,7 +110,7 @@ ARCH has two entrypoints:
   ./arch-cli log --level INFO --file /path/to/log
   ```
 
-  Logging configuration is stored in `/etc/arch/arch.env` and will be picked up by both `arch-cli` and `main.py`.
+  Logging configuration is stored in `/var/tmp/arch/arch.env` and will be picked up by both `arch-cli` and `main.py`.
 
 ARCH has two modes of operations, controlled by setting the containerized workload's environment variables.
 

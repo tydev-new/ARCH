@@ -298,8 +298,27 @@ If both conditions pass, return true. If either fails, return false.
 ## 5. Internal State
 
 Need to track the containers states relevant to checkpoint and restore.
-
 Since ARCH is called by multiple processes, each state read & write operation needs to be atomic and persistent to file.
+
+### 5.1 State Directory Structure
+
+ARCH uses `/var/tmp/arch/` as the base directory for state management:
+```
+/var/tmp/arch/           # Base directory (0o777)
+├── arch.env            # Configuration file (0o666)
+├── state/             # Container state files (0o755)
+└── checkpoint/        # Container checkpoints
+```
+
+The directory structure is created during installation with the following permissions:
+- Base directory: 0o777 (rwxrwxrwx)
+- Configuration file: 0o666 (rw-rw-rw-)
+- State directory: 0o755 (rwxr-xr-x)
+
+This structure allows:
+- Both root and non-root users to access the base directory
+- Configuration file to be readable/writable by all users
+- State files to be managed by the ARCH process
 
 The tracked states include:
 

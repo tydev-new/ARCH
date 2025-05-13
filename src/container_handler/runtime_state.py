@@ -68,7 +68,7 @@ class ContainerRuntimeState:
             # Execute command
             result = subprocess.run(cmd, check=False, capture_output=True, text=True)
             if result.returncode != 0:
-                logger.error("Failed to get state for container %s: %s", container_id, result.stderr)
+                logger.warning("Failed to get state for container %s: %s", container_id, result.stderr)
                 return None, None
                 
             # Parse output

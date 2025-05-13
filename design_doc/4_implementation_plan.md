@@ -7,6 +7,7 @@ This document outlines the implementation plan for ARCH, including detailed task
 ## Project Setup
 
 - Project root folder: `/home/ec2-user/new-arch`
+- State directory: `/var/tmp/arch/`
 - Logging will be implemented from the beginning as it's essential for debugging
 
 ## Engineering Task Breakdown

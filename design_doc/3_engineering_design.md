@@ -238,7 +238,7 @@ arch --help                           # Show all commands
 Logging configuration is managed through:
 - Command line: `arch log --level LEVEL --file FILE`
 - Environment variables: `ARCH_LOG_LEVEL` and `ARCH_LOG_FILE`
-- Config file: `/etc/arch/arch.env`
+- Config file: `/var/tmp/arch/arch.env`
 
 Default values:
 - Log level: WARNING
