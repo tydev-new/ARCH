@@ -7,7 +7,33 @@ from typing import List, Dict
 from src.utils.logging import logger, setup_logger
 from src.container_handler.flag_manager import ContainerFlagManager
 from src.container_handler.runtime_state import ContainerRuntimeState
-from src.utils.constants import CONFIG_PATH, LOG_FILE, USER_CONFIG_PATH, USER_CONFIG_DIR
+from src.utils.constants import CONFIG_PATH, LOG_FILE, USER_CONFIG_PATH
+
+HELP_TEXT = '''ARCH CLI - Container Management Tool
+
+Commands:
+  container finalize    Finalize all ARCH containers
+  log                  Configure logging settings
+
+Logging Configuration:
+  --level LEVEL        Set log level
+                       DEBUG: Detailed debugging information
+                       INFO: General operational information
+                       WARNING: Warning messages
+                       ERROR: Error messages only
+
+  --file FILE          Set log file path
+                       Examples:
+                       - /var/log/arch.log
+                       - ./logs/arch.log
+
+Examples:
+  # Finalize all ARCH containers
+  arch-cli container finalize
+
+  # Configure logging
+  arch-cli log --level DEBUG --file /var/log/arch.log
+'''
 
 def parse_args(args=None):
     """Parse command line arguments.
@@ -15,26 +41,29 @@ def parse_args(args=None):
     Args:
         args: Optional list of arguments. If None, uses sys.argv[1:].
     """
-    parser = argparse.ArgumentParser(description='ARCH CLI container finalizer')
-    subparsers = parser.add_subparsers(dest='command', help='Commands')
+    parser = argparse.ArgumentParser(
+        description=HELP_TEXT,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    subparsers = parser.add_subparsers(dest='command')
     
     # Container finalize command
-    container_parser = subparsers.add_parser('container', help='Container operations')
-    container_subparsers = container_parser.add_subparsers(dest='container_command', help='Container commands')
-    container_subparsers.add_parser('finalize', help='Finalize all ARCH containers')
+    container_parser = subparsers.add_parser('container')
+    container_subparsers = container_parser.add_subparsers(dest='container_command')
+    container_subparsers.add_parser('finalize')
     
     # Logging configuration command
-    log_parser = subparsers.add_parser('log', help='Logging configuration')
+    log_parser = subparsers.add_parser('log')
     log_parser.add_argument('--level', 
-                          choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
-                          help='Set logging level')
-    log_parser.add_argument('--file',
-                          help='Set log file path')
+                          choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'])
+    log_parser.add_argument('--file')
     
     return parser.parse_args(args)
 
 def configure_logging(args):
     """Configure logging based on command line arguments."""
+    global logger
+    
     if args.command == 'log':
         # Read existing config
         config = {}
@@ -55,15 +84,27 @@ def configure_logging(args):
             config['ARCH_LOG_FILE'] = log_path
             
         # Create user config directory if needed
-        os.makedirs(USER_CONFIG_DIR, exist_ok=True)
+        try:
+            os.makedirs(USER_CONFIG_PATH, mode=0o777, exist_ok=True)
+        except PermissionError:
+            logger.error("Permission denied: Cannot create config directory. Try running with sudo.")
+            return False
             
         # Write updated config
-        with open(CONFIG_PATH, 'w') as f:
-            for key, value in sorted(config.items()):
-                f.write(f"{key}={value}\n")
+        try:
+            with open(CONFIG_PATH, 'w') as f:
+                for key, value in sorted(config.items()):
+                    f.write(f"{key}={value}\n")
+            # Try to set permissions, but don't fail if we can't
+            #try:
+            #    os.chmod(CONFIG_PATH, 0o666)  # rw-rw-rw-
+            #except PermissionError:
+            #    logger.warning("Could not set config file permissions. Some features may be limited.")
+        except PermissionError:
+            logger.error("Permission denied: Cannot write to config file. Try running with sudo.")
+            return False
         
         # Update the logger with new config
-        global logger
         logger = setup_logger('arch')
                 
         logger.info("Logging configured - level: %s, file: %s", 

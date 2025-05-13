@@ -3,10 +3,10 @@
 import os
 
 # Configuration paths
-USER_CONFIG_DIR = os.path.expanduser("~/.arch")
-CONFIG_PATH = os.path.join(USER_CONFIG_DIR, "arch.env")
-STATE_DIR = os.path.join(USER_CONFIG_DIR, "state")
-DEFAULT_CHECKPOINT_PATH = os.path.join(USER_CONFIG_DIR, "checkpoint")
+USER_CONFIG_PATH = "/var/tmp/arch"
+CONFIG_PATH = os.path.join(USER_CONFIG_PATH, "arch.env")
+STATE_PATH = os.path.join(USER_CONFIG_PATH, "state")
+DEFAULT_CHECKPOINT_PATH = os.path.join(USER_CONFIG_PATH, "checkpoint")
 
 # Environment variables
 ENV_REAL_RUNC_CMD = "ARCH_REAL_RUNC_CMD"

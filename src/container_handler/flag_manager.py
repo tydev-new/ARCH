@@ -4,7 +4,7 @@ import fcntl
 from datetime import datetime
 from typing import Dict, Optional, Tuple, List
 from src.utils.logging import logger
-from src.utils.constants import STATE_DIR
+from src.utils.constants import STATE_PATH
 
 class ContainerFlagManager:
     """Manages container state in a persistent and atomic way.
@@ -17,7 +17,7 @@ class ContainerFlagManager:
     STATE_VERSION = '1.0'
     REQUIRED_FIELDS = {'version', 'skip_start', 'skip_resume', 'keep_resources', 'exit_code', 'last_updated'}
     
-    def __init__(self, state_dir: str = STATE_DIR):
+    def __init__(self, state_dir: str = STATE_PATH):
         """
         Initialize the state manager.
         

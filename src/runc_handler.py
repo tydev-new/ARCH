@@ -31,7 +31,8 @@ class RuncHandler:
         if env_cmd and os.path.exists(env_cmd) and os.access(env_cmd, os.X_OK):
             logger.info("Using real runc from environment variable: %s", env_cmd)
             return env_cmd
-            
+
+        logger.info("Using real runc from config file: %s", CONFIG_PATH)
         # Try reading from tardis.env file
         if os.path.exists(CONFIG_PATH):
             try:
@@ -223,6 +224,8 @@ class RuncHandler:
         if not self.flag_manager.has_flag(namespace, container_id):
             logger.info("No flag found for container %s, passing through", container_id)
             return self._execute_command(args)
+        else:
+            logger.info("Flag found for container %s, proceeding with delete", container_id)
         
         # Get container state
         state = self.runtime_state.get_container_state(container_id, namespace)
@@ -231,7 +234,11 @@ class RuncHandler:
             logger.warning("Container %s is not stopped, cannot delete", container_id)
             
         # Cleanup container resources
-        self._cleanup_container_resources(container_id, namespace)
+        if not self.flag_manager.get_keep_resources(namespace, container_id):
+            logger.info("Cleaning up container resources for container %s", container_id)
+            self._cleanup_container_resources(container_id, namespace)
+        else:
+            logger.info("Keeping container resources for container %s", container_id)
         
         # Clear flag file
         self.flag_manager.clear_flag(namespace, container_id)
@@ -276,7 +283,7 @@ class RuncHandler:
                 return self._execute_command(args[1:])
             
             # Create flag if container_id is present
-            if container_id and namespace:
+            if container_id and namespace and subcommand == "create":
                 if not self.flag_manager.has_flag(namespace, container_id):
                     logger.info("Creating flag for container %s in namespace %s", container_id, namespace)
                     self.flag_manager.create_flag(namespace, container_id)

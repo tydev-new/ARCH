@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import json
 from src.utils.logging import logger
-from src.utils.constants import CONFIG_DIR, CONFIG_PATH, ENV_REAL_RUNC_CMD
+from src.utils.constants import USER_CONFIG_PATH, CONFIG_PATH, ENV_REAL_RUNC_CMD
 
 def check_root():
     """Check if running as root"""
@@ -91,12 +91,13 @@ def install_wrapper():
             shutil.copy2(real_runc_path, backup_path)
             logger.info(f"Created backup at {backup_path}")
         
-        # Create config directory if it doesn't exist
-        os.makedirs(CONFIG_DIR, exist_ok=True)
+        # Create config directory with proper permissions
+        os.makedirs(USER_CONFIG_PATH, mode=0o777, exist_ok=True)
         
-        # Save configuration
+        # Save configuration with proper permissions
         with open(CONFIG_PATH, 'w') as f:
             f.write(f"{ENV_REAL_RUNC_CMD}={backup_path}\n")
+        os.chmod(CONFIG_PATH, 0o666)  # rw-rw-rw-
         logger.info(f"Saved configuration to {CONFIG_PATH}")
         
         # Get wrapper script path and validate
@@ -173,9 +174,9 @@ def uninstall():
             return False
             
         # Remove config directory if empty
-        if os.path.exists(CONFIG_DIR) and not os.listdir(CONFIG_DIR):
-            os.rmdir(CONFIG_DIR)
-            logger.info(f"Removed empty directory {CONFIG_DIR}")
+        if os.path.exists(USER_CONFIG_PATH) and not os.listdir(USER_CONFIG_PATH):
+            os.rmdir(USER_CONFIG_PATH)
+            logger.info(f"Removed empty directory {USER_CONFIG_PATH}")
             
         logger.info("ARCH uninstallation complete")
         return True
