@@ -13,18 +13,16 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     echo "Remote URL updated to: $NEW_REMOTE"
 fi
 
-# Get list of changed files
-CHANGED_FILES=$(git status --porcelain | awk '{print $2}')
-
-if [ -z "$CHANGED_FILES" ]; then
-    echo "No changes detected"
-    exit 0
-fi
-
-# Add all changed files
+# Get list of changed files and filter out non-existent ones
 echo "Adding changed files:"
-echo "$CHANGED_FILES"
-git add $CHANGED_FILES
+for file in $(git status --porcelain | awk '{print $2}'); do
+    if [ -e "$file" ]; then
+        echo "$file"
+        git add "$file"
+    else
+        echo "Skipping non-existent file: $file"
+    fi
+done
 
 # Get commit message
 read -p "Enter commit message: " COMMIT_MSG

@@ -3,10 +3,12 @@
 ARCH enables automated container checkpoint-and-restore. With ARCH, containers can seamlessly migrate across nodes and time. It allows containers to survive spot instance reclaims, pause during peak hours, and restore without losing progress. 
 
 In practical terms, 
-- For cloud users, they can safely run containerized batch workload on spot instances, with cost savings up to 90% on cloud compute resources
+- For cloud users, they can safely run containerized batch workload on spot instances, with cost savings up to 90% on cloud compute resources *
 - For on-prem users, they can significantly improve resource utilization and scheduled completion time for long-running batch workload
 
 Furthermore, ARCH requires no modifications to existing applications and workflow.
+
+*Note: To build a complete system, additional components customized for each cloud provider (AWS, GCP, Azure) are required.
 
 ## 🧠 Why ARCH?
 
