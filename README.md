@@ -175,10 +175,9 @@ ARCH/
 
 The detailed ARCH design can be found under `design_doc/`.
 
-## 🔓 License & Status
+## 🔓 Status
 
 - 📦 Project Stage: Alpha
-- 🔐 License: Apache 2.0
 - 🔗 GitHub: https://github.com/tydev-new/ARCH
 - ✅ Status: All unit and system tests passing, ready for user testing
 
