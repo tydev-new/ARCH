@@ -116,7 +116,7 @@ ARCH has two entrypoints:
 
 ARCH has two modes of operations, controlled by setting the containerized workload's environment variables.
 
-### 1. Local Filesystem Mode
+### a. Local Filesystem Mode
 This mode is useful for small workloads and testing purposes. ARCH checkpoints the container workload and saves the image into a user-specified path. The checkpoint includes the process and all writable files in the container.
 
 The user is responsible for managing the checkpoint image lifecycle, such as moving it to the new instance before restore.
@@ -129,7 +129,7 @@ ARCH_CHECKPOINT_HOST_PATH=/your/path/for/checkpoint/images
 
 The checkpoint image is stored under `ARCH_CHECKPOINT_HOST_PATH/namespace/container_id`.
 
-### 2. Shared Filesystem Mode
+### b. Shared Filesystem Mode
 This mode is useful for medium workloads, where migrating files has high overhead. In addition to checkpointing process and files, ARCH also mounts a user-specified container path (destination) to a shared filesystem path on the host (source), and sets it as the current working directory.
 
 The shared filesystem must be accessible from multiple nodes. Supported options include:
@@ -177,7 +177,7 @@ The detailed ARCH design can be found under `design_doc/`.
 
 ## 🔓 Status
 
-- 📦 Project Stage: Alpha
+- 📦 Project Stage: first release
 - 🔗 GitHub: https://github.com/tydev-new/ARCH
 - ✅ Status: All unit and system tests passing, ready for user testing
 
